@@ -1,0 +1,52 @@
+rules:
+  - when:
+      source: "halo"
+      type: "button"
+      entity: "flower_pot"
+      state_change: "press"
+    then:
+      - action: "toggle"
+        target:
+          type: "hue.light"
+          id: "flower_pot"
+
+  - when:
+      source: "halo"
+      type: "button"
+      entity: "flower_pot"
+      state_change: "rotate"
+      conditions:
+        "direction": "clockwise"
+    then:
+      - action: "step_brightness"
+        target:
+          type: "hue.light"
+          id: "flower_pot"
+        params:
+          step: "${payload.step}"
+
+  - when:
+      source: "halo"
+      type: "button"
+      entity: "movie"
+      state_change: "press"
+    then:
+      - action: "set_scene"
+        target:
+          type: "hue.room"
+          id: "stue"
+        params:
+          scene: "movie"
+
+  - when:
+      source: "hue"
+      type: "light"
+      entity: "flower_pot"
+      state_change: "brightness"
+    then:
+      - action: "update_btn_val"
+        target:
+          type: "halo.btn"
+          id: "flower_pot"
+        params:
+          brightness: "${payload.brightness}"
