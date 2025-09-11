@@ -21,7 +21,8 @@ func NewPubSub() *PubSub {
 
 // Subscribe returns a channel that receives events
 func (ps *PubSub) Subscribe() <-chan Event {
-	ch := make(chan Event, 10)
+	// TODO: Increase buffer on channel
+	ch := make(chan Event, 100)
 	ps.subscribers = append(ps.subscribers, ch)
 	return ch
 }
@@ -29,11 +30,18 @@ func (ps *PubSub) Subscribe() <-chan Event {
 // Publish sends the event to all subscribers
 func (ps *PubSub) Publish(e Event) {
 	ps.Logger.Info("publishing event", zap.Int("subscribers", len(ps.subscribers)), zap.Any("event", e))
+
 	for _, sub := range ps.subscribers {
 		select {
 		case sub <- e:
 		default:
-			// drop event if subscriber is slow
+			// buffer full: drop oldest and insert newest
+			select {
+			case <-sub:
+			default:
+			}
+			sub <- e
+			ps.Logger.Warn("subscriber too slow, dropped oldest event", zap.Any("event", e))
 		}
 	}
 }
