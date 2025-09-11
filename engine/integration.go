@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"go.uber.org/zap"
 	"home_automation_server/engine/rules"
 	"home_automation_server/pubsub"
 )
@@ -26,4 +27,8 @@ type Integration struct {
 
 func (e *Engine) RegisterIntegration(label string, integration Integration) {
 	e.Integrations[label] = integration
+}
+
+func IntegrationLogger(base *zap.Logger, name string) *zap.Logger {
+	return base.Named(name).With(zap.String("integration", name))
 }

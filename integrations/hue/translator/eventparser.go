@@ -4,24 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"go.uber.org/zap"
+	"home_automation_server/integrations/hue/translator/events"
 	"time"
 )
-
-// RegisterEvent registers a constructor for an eventType string
-func (t *Translator) RegisterEvent(eventType string, constructor func() Event) {
-	t.EventParser.EventRegistry[eventType] = constructor
-}
 
 // EventParser parses raw bytes into the correct event type
 type EventParser struct {
 	Logger        *zap.Logger
-	EventRegistry map[string]func() Event
+	EventRegistry map[string]func() events.Event
 }
 
 func NewEventParser(logger *zap.Logger) EventParser {
 	return EventParser{
 		Logger:        logger,
-		EventRegistry: make(map[string]func() Event),
+		EventRegistry: make(map[string]func() events.Event),
 	}
 }
 
@@ -32,16 +28,12 @@ type EventEnvelope struct {
 	RawData      []json.RawMessage `json:"data"`
 }
 
-type Event interface {
-	GetType() string
-}
-
 type TypeWrapper struct {
 	Type string `json:"type"`
 }
 
 type EventBatch struct {
-	Events    []Event
+	Events    []events.Event
 	TimeStamp time.Time
 }
 
@@ -58,7 +50,7 @@ func (p *EventParser) parse(b []byte) (EventBatch, error) {
 		envelopes = append(envelopes, single)
 	}
 
-	allEvents := []Event{}
+	allEvents := []events.Event{}
 	timeStamp := time.Time{}
 
 	for _, envelope := range envelopes {
@@ -99,4 +91,9 @@ func (p *EventParser) parse(b []byte) (EventBatch, error) {
 		Events:    allEvents,
 		TimeStamp: timeStamp,
 	}, nil
+}
+
+// RegisterEvent registers a constructor for an eventType string
+func (t *Translator) RegisterEvent(eventType string, constructor func() events.Event) {
+	t.EventParser.EventRegistry[eventType] = constructor
 }

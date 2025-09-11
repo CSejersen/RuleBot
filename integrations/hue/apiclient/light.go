@@ -43,7 +43,6 @@ func (c *ApiClient) Lights() ([]Light, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("received light data")
 	return resp.Data, nil
 }
 

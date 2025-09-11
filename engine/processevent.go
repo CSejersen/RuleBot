@@ -8,18 +8,20 @@ import (
 	"home_automation_server/pubsub"
 )
 
-func (e *Engine) ProcessEvents(ctx context.Context) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case event := <-e.EventChannel:
-			// resolve state_change
-			if err := e.processEvent(event); err != nil {
-				e.Logger.Warn("Failed to process event", zap.Error(err))
+func (e *Engine) ProcessEvents(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				e.Logger.Info("context cancelled")
+				return
+			case event := <-e.EventChannel:
+				if err := e.processEvent(event); err != nil {
+					e.Logger.Warn("failed to process event", zap.Error(err))
+				}
 			}
 		}
-	}
+	}()
 }
 
 func (e *Engine) processEvent(event pubsub.Event) error {

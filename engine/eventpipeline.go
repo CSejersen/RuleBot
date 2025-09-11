@@ -13,7 +13,7 @@ type EventPipeline struct {
 	Logger     *zap.Logger
 }
 
-func (e *Engine) RunPipelines(ctx context.Context) {
+func (e *Engine) RunEventPipelines(ctx context.Context) {
 	for label, integration := range e.Integrations {
 		go func() {
 			p := e.constructEventPipeline(label, &integration)

@@ -18,19 +18,14 @@ type Engine struct {
 	EventChannel <-chan pubsub.Event
 }
 
-func New() *Engine {
+func New(logger *zap.Logger) *Engine {
 	ps := pubsub.NewPubSub()
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		panic(err)
-		return nil
-	}
 
 	return &Engine{
 		Integrations: make(map[string]Integration),
 		RuleSet:      rules.RuleSet{},
 		PS:           ps,
-		Logger:       logger,
+		Logger:       logger.Named("engine"),
 		EventChannel: ps.Subscribe(),
 	}
 }

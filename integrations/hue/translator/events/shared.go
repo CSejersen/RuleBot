@@ -1,5 +1,9 @@
 package events
 
+type Event interface {
+	GetType() string
+}
+
 type Owner struct {
 	RID   string `json:"rid"`
 	RType string `json:"rtype"`

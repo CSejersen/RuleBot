@@ -21,8 +21,7 @@ func NewPubSub() *PubSub {
 
 // Subscribe returns a channel that receives events
 func (ps *PubSub) Subscribe() <-chan Event {
-	// TODO: Increase buffer on channel
-	ch := make(chan Event, 100)
+	ch := make(chan Event, 50)
 	ps.subscribers = append(ps.subscribers, ch)
 	return ch
 }

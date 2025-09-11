@@ -37,12 +37,17 @@ func New(client *apiclient.ApiClient, logger *zap.Logger) (*Translator, error) {
 // TODO: implement continouos refreshing of the registry to keep it aligned with the bridge state.
 // maybe events are published on state changes otherwise we refresh on some interval
 func (t *Translator) init() error {
+	t.LoadEvents()
+
+	// init registry of human-readable id's
 	t.Registry = make(map[string]map[string]string)
+
 	// Lights
 	lights, err := t.Client.Lights()
 	if err != nil {
 		return err
 	}
+
 	t.Registry["light"] = make(map[string]string)
 	for _, l := range lights {
 		t.Registry["light"][l.ID] = l.Metadata.Name
@@ -77,7 +82,7 @@ func (t *Translator) Translate(raw []byte) ([]pubsub.Event, error) {
 	return psEvents, nil
 }
 
-func (t *Translator) translateLightUpdate(e Event, ts time.Time) (pubsub.Event, error) {
+func (t *Translator) translateLightUpdate(e events.Event, ts time.Time) (pubsub.Event, error) {
 	lightEvent, ok := e.(*events.LightUpdate)
 	if !ok {
 		return pubsub.Event{}, fmt.Errorf("expected a *LightUpdate for event type 'light'")
@@ -110,4 +115,10 @@ func (t *Translator) LookupName(eventType, id string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func (t *Translator) LoadEvents() {
+	for typ, constructor := range events.Registry {
+		t.RegisterEvent(typ, constructor)
+	}
 }
