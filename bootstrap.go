@@ -4,6 +4,7 @@ import (
 	"context"
 	"go.uber.org/zap"
 	"home_automation_server/engine"
+	"home_automation_server/integrations/halo"
 	"home_automation_server/integrations/hue"
 	"log"
 	"os"
@@ -38,6 +39,13 @@ func registerIntegrations(e *engine.Engine, logger *zap.Logger) {
 		logger.Fatal("failed to init Hue integration", zap.Error(err))
 	}
 	e.RegisterIntegration("hue", hueIntegration)
+
+	// Halo
+	haloIntegration, err := halo.NewHaloIntegration(logger)
+	if err != nil {
+		logger.Fatal("failed to init Halo integration", zap.Error(err))
+	}
+	e.RegisterIntegration("halo", haloIntegration)
 }
 
 func runEngine(e *engine.Engine, logger *zap.Logger, ctx context.Context) {

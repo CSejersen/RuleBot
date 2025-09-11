@@ -25,12 +25,14 @@ func (e *Engine) ProcessEvents(ctx context.Context) {
 }
 
 func (e *Engine) processEvent(event pubsub.Event) error {
-	e.Logger.Info("processing event", zap.String("source", event.Source), zap.String("type", event.Type))
+	//e.Logger.Info("processing event", zap.String("source", event.Source), zap.String("type", event.Type))
 	for _, rule := range e.RuleSet.Rules {
 		if rule.When.Matches(event) {
-			e.Logger.Info("rule match found, executing actions")
+			//e.Logger.Info("rule match found, executing actions")
 			for _, action := range rule.Then {
-				action.ResolveParams(event) // resolve templated strings
+				resolved := action.ResolveTemplatedParams(event) // resolve templated strings
+				e.Logger.Debug("resolved templated params", zap.Any("params", resolved))
+				action.Params = resolved
 				err := e.executeAction(&action)
 				if err != nil {
 					return fmt.Errorf("failed to execute action: %w", err)

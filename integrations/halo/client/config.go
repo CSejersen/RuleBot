@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 	"os"
 )
 
@@ -12,37 +14,16 @@ type ConfigWrapper struct {
 }
 
 type Config struct {
-	Version string  `json:"version"`
-	ID      string  `json:"id"`
-	Pages   []*Page `json:"pages"`
-}
-
-type Page struct {
-	Title   string    `json:"title"`
-	ID      string    `json:"id"`
-	Buttons []*Button `json:"buttons"`
-}
-
-type Button struct {
-	ID       string  `json:"id"`
-	Title    string  `json:"title"`
-	Subtitle string  `json:"subtitle"`
-	Value    int     `json:"value"`
-	State    string  `json:"state"`
-	Content  Content `json:"content"`
-	Default  bool    `json:"default"`
-}
-
-type Content struct {
-	Text string `json:"text,omitempty"`
-	Icon string `json:"icon,omitempty"`
+	Version string  `yaml:"version" json:"version"`
+	ID      string  `yaml:"id" json:"id"`
+	Pages   []*Page `yaml:"pages" json:"pages"`
 }
 
 type Registry struct {
 	Buttons map[string]*Button
 }
 
-// TODO: Maybe move responsibility to the engine
+// implement a fs watcher for the rules file to update the config on changes.
 func (c *Client) loadConfig(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -50,15 +31,11 @@ func (c *Client) loadConfig(path string) error {
 	}
 
 	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return fmt.Errorf("error parsing config file: %w", err)
 	}
 
-	// TODO: build registry
-
-	if err := c.deployConfig(&cfg); err != nil {
-		return err
-	}
+	c.Config = &cfg
 
 	return nil
 }
@@ -67,6 +44,7 @@ func (c *Client) deployConfig(cfg *Config) error {
 	wrapped := ConfigWrapper{
 		Configuration: *cfg,
 	}
+	c.Logger.Debug("Deploying config", zap.Any("config", wrapped))
 	bytes, err := json.Marshal(wrapped)
 	if err != nil {
 		return fmt.Errorf("failed to marshal beoremote halo config: %w", err)

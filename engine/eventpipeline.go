@@ -4,11 +4,13 @@ import (
 	"context"
 	"go.uber.org/zap"
 	"home_automation_server/pubsub"
+	"time"
 )
 
 type EventPipeline struct {
 	Source     EventSource
 	Translator EventTranslator
+	Aggregator EventAggregator
 	PubSub     *pubsub.PubSub
 	Logger     *zap.Logger
 }
@@ -33,9 +35,16 @@ func (p *EventPipeline) run(ctx context.Context) error {
 		}
 	}()
 
+	// periodic flush for aggregators
+	ticker := time.NewTicker(300 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
+			if event := p.Aggregator.Flush(); event != nil {
+				p.PubSub.Publish(*event)
+			}
 			return ctx.Err()
 		case raw := <-rawCh:
 			events, err := p.Translator.Translate(raw)
@@ -44,21 +53,25 @@ func (p *EventPipeline) run(ctx context.Context) error {
 				continue
 			}
 			for _, e := range events {
-				p.PubSub.Publish(e)
+				// some events might be buffered by the eventaggregator
+				// if event is passed through we publish now
+				if event := p.Aggregator.Aggregate(e); event != nil {
+					p.PubSub.Publish(e)
+				}
+			}
+		case <-ticker.C:
+			if out := p.Aggregator.Flush(); out != nil {
+				p.PubSub.Publish(*out)
 			}
 		}
 	}
-}
-
-type HueApiInfo struct {
-	IP     string
-	AppKey string
 }
 
 func (e *Engine) constructEventPipeline(label string, i *Integration) EventPipeline {
 	return EventPipeline{
 		Source:     i.EventSource,
 		Translator: i.Translator,
+		Aggregator: i.Aggregator,
 		PubSub:     e.PS,
 		Logger:     e.Logger.With(zap.String("integration", label)),
 	}

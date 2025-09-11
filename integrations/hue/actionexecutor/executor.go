@@ -10,19 +10,30 @@ import (
 type Executor struct {
 	Client *hue_client.ApiClient
 	Logger *zap.Logger
+
+	// Registry: human-readableID -> hueID
+	Registry Registry
 }
 
-func New(client *hue_client.ApiClient, logger *zap.Logger) *Executor {
-	return &Executor{
+func New(client *hue_client.ApiClient, logger *zap.Logger) (*Executor, error) {
+	e := &Executor{
 		Client: client,
 		Logger: logger,
 	}
+	if err := e.InitRegistry(); err != nil {
+		return nil, err
+	}
+
+	return e, nil
 }
 
 func (e *Executor) ExecuteAction(action *rules.Action) error {
 	switch action.Action {
+	case "step_brightness":
+		return e.stepBrightness(action)
 	case "adjust_brightness":
-		return e.adjustBrightness(action)
+		return nil
+		//return e.setBrightness(action)
 	case "set_scene":
 		return e.setScene(action)
 	default:

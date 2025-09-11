@@ -1,35 +1,50 @@
 rules:
   - when:
-      source: "halo"
-      type: "button"
+      source: "hue"
+      type: "light"
       entity: "flower_pot"
-      state_change: "press"
+      state_change: "brightness"
     then:
-      - action: "toggle"
+      - action: "update_button_value"
         target:
-          type: "hue.light"
-          id: "flower_pot"
+          type: "halo.button"
+          id: "Flower pot"
+        params:
+          value: "${payload.brightness}"
 
   - when:
       source: "halo"
-      type: "button"
+      type: "wheel"
       entity: "flower_pot"
-      state_change: "rotate"
-      conditions:
-        "direction": "clockwise"
+      state_change: "clockwise"
     then:
       - action: "step_brightness"
         target:
           type: "hue.light"
-          id: "flower_pot"
+          id: "Flower Pot"
         params:
+          direction: "up"
+          step: "${payload.step}"
+
+  - when:
+      source: "halo"
+      type: "wheel"
+      entity: "flower_pot"
+      state_change: "counter_clockwise"
+    then:
+      - action: "step_brightness"
+        target:
+          type: "hue.light"
+          id: "Flower Pot"
+        params:
+          direction: "down"
           step: "${payload.step}"
 
   - when:
       source: "halo"
       type: "button"
       entity: "movie"
-      state_change: "press"
+      state_change: "pressed"
     then:
       - action: "set_scene"
         target:
@@ -37,16 +52,3 @@ rules:
           id: "stue"
         params:
           scene: "movie"
-
-  - when:
-      source: "hue"
-      type: "light"
-      entity: "flower_pot"
-      state_change: "brightness"
-    then:
-      - action: "update_btn_val"
-        target:
-          type: "halo.btn"
-          id: "flower_pot"
-        params:
-          brightness: "${payload.brightness}"

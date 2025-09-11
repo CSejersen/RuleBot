@@ -23,7 +23,7 @@ type Translator struct {
 func New(client *apiclient.ApiClient, logger *zap.Logger) (*Translator, error) {
 	t := &Translator{
 		Client:      client,
-		EventParser: NewEventParser(logger),
+		EventParser: newEventParser(logger),
 		Logger:      logger,
 	}
 
@@ -34,7 +34,7 @@ func New(client *apiclient.ApiClient, logger *zap.Logger) (*Translator, error) {
 	return t, nil
 }
 
-// TODO: implement continouos refreshing of the registry to keep it aligned with the bridge state.
+// TODO: implement continuous refreshing of the registry to keep it aligned with the bridge state.
 // maybe events are published on state changes otherwise we refresh on some interval
 func (t *Translator) init() error {
 	t.LoadEvents()
@@ -64,7 +64,7 @@ func (t *Translator) Translate(raw []byte) ([]pubsub.Event, error) {
 		return nil, fmt.Errorf("failed to parse events: %w", err)
 	}
 
-	// TODO: if switch case grows beyond what is reasonable we could implement a map of event type to translator-func
+	// TODO: if switch cases grow beyond what is reasonable we could implement a map of event type to translator-func
 	psEvents := []pubsub.Event{}
 	for _, e := range eventBatch.Events {
 		switch e.GetType() {
@@ -119,6 +119,6 @@ func (t *Translator) LookupName(eventType, id string) (string, bool) {
 
 func (t *Translator) LoadEvents() {
 	for typ, constructor := range events.Registry {
-		t.RegisterEvent(typ, constructor)
+		t.EventParser.RegisterEvent(typ, constructor)
 	}
 }

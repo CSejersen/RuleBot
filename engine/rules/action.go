@@ -21,7 +21,7 @@ func (a *Action) ResolveExecutorName() string {
 	return strings.Split(a.Target.Type, ".")[0]
 }
 
-func (a *Action) ResolveParams(event pubsub.Event) map[string]interface{} {
+func (a *Action) ResolveTemplatedParams(event pubsub.Event) map[string]interface{} {
 	resolved := make(map[string]interface{})
 	for k, v := range a.Params {
 		switch val := v.(type) {
@@ -49,11 +49,18 @@ func (a *Action) FloatParam(key string) (float64, error) {
 	if !ok {
 		return 0, fmt.Errorf("missing param: %s", key)
 	}
-	val, ok := raw.(float64)
-	if !ok {
+
+	switch v := raw.(type) {
+	case float64:
+		return v, nil
+	case *float64:
+		if v == nil {
+			return 0, fmt.Errorf("param %s is nil pointer", key)
+		}
+		return *v, nil
+	default:
 		return 0, fmt.Errorf("param %s must be float, got %T", key, raw)
 	}
-	return val, nil
 }
 
 func (a *Action) IntParam(key string) (int, error) {

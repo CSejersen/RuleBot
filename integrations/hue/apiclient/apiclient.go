@@ -14,11 +14,10 @@ import (
 type HueType string
 
 type ApiClient struct {
-	IP       string
-	AppKey   string
-	client   *http.Client
-	Logger   *zap.Logger
-	Registry *Registry
+	IP     string
+	AppKey string
+	client *http.Client
+	Logger *zap.Logger
 }
 
 func New(ip string, appKey string, logger *zap.Logger) *ApiClient {
@@ -28,7 +27,6 @@ func New(ip string, appKey string, logger *zap.Logger) *ApiClient {
 		client: newHTTPClient(),
 		Logger: logger,
 	}
-	c.InitRegistry()
 	return c
 }
 
@@ -78,10 +76,10 @@ func (c *ApiClient) doApiV2Request(method, path string, body interface{}, v inte
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	c.Logger.Debug("sending request",
-		zap.String("method", method),
-		zap.String("url", url),
-		zap.Any("body", body))
+	//c.Logger.Debug("sending request",
+	//	zap.String("method", method),
+	//	zap.String("url", url),
+	//	zap.Any("body", body))
 
 	resp, err := c.client.Do(req)
 	if err != nil {

@@ -14,7 +14,7 @@ type EventParser struct {
 	EventRegistry map[string]func() events.Event
 }
 
-func NewEventParser(logger *zap.Logger) EventParser {
+func newEventParser(logger *zap.Logger) EventParser {
 	return EventParser{
 		Logger:        logger,
 		EventRegistry: make(map[string]func() events.Event),
@@ -68,7 +68,7 @@ func (p *EventParser) parse(b []byte) (EventBatch, error) {
 
 			constructor, ok := p.EventRegistry[typeWrapper.Type]
 			if !ok {
-				p.Logger.Info("Unsupported event type, skipping", zap.String("type", typeWrapper.Type))
+				//p.Logger.Info("Unsupported event type, skipping", zap.String("type", typeWrapper.Type))
 				continue
 			}
 
@@ -94,6 +94,6 @@ func (p *EventParser) parse(b []byte) (EventBatch, error) {
 }
 
 // RegisterEvent registers a constructor for an eventType string
-func (t *Translator) RegisterEvent(eventType string, constructor func() events.Event) {
-	t.EventParser.EventRegistry[eventType] = constructor
+func (p *EventParser) RegisterEvent(eventType string, constructor func() events.Event) {
+	p.EventRegistry[eventType] = constructor
 }

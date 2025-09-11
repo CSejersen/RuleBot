@@ -1,17 +1,16 @@
-package handlers
+package client
 
 import (
 	"encoding/json"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
-	"home_automation_server/integrations/halo/client"
 )
 
 type UpdateButton struct {
-	Content UpdateButtonContent `json:"content,omitempty"`
 	Type    string              `json:"type"`
 	Id      string              `json:"id"`
 	Value   int                 `json:"value,omitempty"`
+	Content UpdateButtonContent `json:"content,omitempty"`
 }
 
 type UpdateButtonContent struct {
@@ -19,20 +18,25 @@ type UpdateButtonContent struct {
 	Icon string `json:"icon,omitempty"`
 }
 
-func UpdateButtonValue(c *client.Client, id string, val int) error {
-	// TODO: clamp value between 0..100
-	c.Logger.Info("Updating button value", zap.String("id", id), zap.Int("value", val))
+func (c *Client) UpdateButtonValue(name string, val int) error {
+	btnID, err := c.ResolveBtnId(name)
+	if err != nil {
+		c.Logger.Error("Failed to resolve button id", zap.String("name", name), zap.Error(err))
+		return err
+	}
 
 	update := UpdateCommand[UpdateButton]{
 		Update: UpdateButton{
 			Type:  "button",
-			Id:    id,
+			Id:    btnID,
 			Value: val,
 			Content: UpdateButtonContent{
 				Icon: "lights",
 			},
 		},
 	}
+
+	c.Logger.Info("Updating button", zap.String("name", name), zap.Int("value", val), zap.Any("update", update))
 
 	bytes, err := json.Marshal(update)
 	if err != nil {
@@ -46,4 +50,14 @@ func UpdateButtonValue(c *client.Client, id string, val int) error {
 	}
 
 	return nil
+}
+
+func (c *Client) Buttons() []*Button {
+	buttons := []*Button{}
+	for _, page := range c.Config.Pages {
+		for _, button := range page.Buttons {
+			buttons = append(buttons, button)
+		}
+	}
+	return buttons
 }

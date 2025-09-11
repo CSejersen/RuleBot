@@ -1,4 +1,4 @@
-package executor
+package actionexecutor
 
 import (
 	"home_automation_server/engine/rules"

@@ -19,10 +19,16 @@ type ActionExecutor interface {
 	ExecuteAction(action *rules.Action) error
 }
 
+type EventAggregator interface {
+	Aggregate(pubsub.Event) *pubsub.Event
+	Flush() *pubsub.Event
+}
+
 type Integration struct {
 	EventSource    EventSource
 	Translator     EventTranslator
 	ActionExecutor ActionExecutor
+	Aggregator     EventAggregator
 }
 
 func (e *Engine) RegisterIntegration(label string, integration Integration) {

@@ -4,17 +4,12 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
-	"home_automation_server/integrations/halo/client/handlers"
 )
 
 type Client struct {
+	Config *Config
 	Conn   *websocket.Conn
-	SendCh <-chan handlers.UpdateCommand[any]
-	Logger *zap.Logger
-}
-
-type NewParams struct {
-	Addr   string
+	SendCh <-chan UpdateCommand[any]
 	Logger *zap.Logger
 }
 
@@ -26,23 +21,37 @@ func (c *Client) runSender() {
 	}
 }
 
-func New(p NewParams) (*Client, error) {
-	conn, _, err := websocket.DefaultDialer.Dial(p.Addr, nil)
+func New(addr, configPath string, logger *zap.Logger) (*Client, error) {
+	conn, _, err := websocket.DefaultDialer.Dial(addr, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to beoremote halov1 websocket: %w", err)
+		return nil, fmt.Errorf("failed to connect to beoremote halo websocket: %w", err)
 	}
 
-	fmt.Println("Connected to beoremote halov1 WebSocket:", p.Addr)
-	fmt.Println("Sending initial config")
+	logger.Debug("established connection to halo ws")
 
 	h := &Client{
 		Conn:   conn,
-		Logger: p.Logger,
+		Logger: logger,
 	}
 
-	if err := h.loadConfig("./config.yaml"); err != nil {
+	if err := h.loadConfig(configPath); err != nil {
 		return nil, err
 	}
+	if err := h.deployConfig(h.Config); err != nil {
+		return nil, err
+	}
+	logger.Debug("config successfully deployed")
 
 	return h, nil
+}
+
+func (c *Client) ResolveBtnId(name string) (string, error) {
+	for _, page := range c.Config.Pages {
+		for _, button := range page.Buttons {
+			if button.Title == name {
+				return button.ID, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("could not find button: %s", name)
 }
