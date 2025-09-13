@@ -16,20 +16,20 @@ func setupContext() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
+func setupEngine(ctx context.Context, logger *zap.Logger, nWorkers int) (*engine.Engine, error) {
+	e, err := engine.New(ctx, logger.Named("engine"), nWorkers)
+	if err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
 func setupLogger() *zap.Logger {
 	logger, err := zap.NewDevelopment()
 	if err != nil {
 		log.Fatalf("can't initialize zap logger: %v", err)
 	}
 	return logger
-}
-
-func setupEngine(ctx context.Context, logger *zap.Logger) *engine.Engine {
-	e := engine.New(logger.Named("engine"))
-	if err := e.Init(ctx); err != nil {
-		log.Fatalf("can't initialize engine: %v", err)
-	}
-	return e
 }
 
 func registerIntegrations(e *engine.Engine, logger *zap.Logger) {

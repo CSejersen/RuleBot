@@ -28,8 +28,7 @@ func (ps *PubSub) Subscribe() <-chan Event {
 
 // Publish sends the event to all subscribers
 func (ps *PubSub) Publish(e Event) {
-	ps.Logger.Info("publishing event", zap.Int("subscribers", len(ps.subscribers)), zap.Any("event", e))
-
+	ps.Logger.Debug("publishing event", zap.Int("subscribers", len(ps.subscribers)), zap.Any("event", e))
 	for _, sub := range ps.subscribers {
 		select {
 		case sub <- e:

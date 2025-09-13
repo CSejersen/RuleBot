@@ -9,6 +9,7 @@ import (
 	"home_automation_server/engine/rules"
 	"home_automation_server/engine/statestore"
 	"os"
+	"sync"
 )
 
 type Engine struct {
@@ -16,23 +17,42 @@ type Engine struct {
 	Integrations    map[string]Integration
 	ServiceRegistry *ServiceRegistry
 	StateStore      *statestore.StateStore
-	PS              *pubsub.PubSub
-	Logger          *zap.Logger
-	EventChannel    <-chan pubsub.Event
+
+	// Collect events from Integrations
+	PS           *pubsub.PubSub
+	EventChannel <-chan pubsub.Event
+
+	// Execute actions
+	actionQueue chan *rules.Action
+	wg          sync.WaitGroup
+	nWorkers    int
+
+	Logger *zap.Logger
 }
 
-func New(logger *zap.Logger) *Engine {
+func New(ctx context.Context, logger *zap.Logger, nWorkers int) (*Engine, error) {
 	ps := pubsub.NewPubSub()
 
-	return &Engine{
+	e := &Engine{
 		RuleSet:         rules.RuleSet{},
 		Integrations:    make(map[string]Integration),
 		ServiceRegistry: newServiceRegistry(),
 		StateStore:      statestore.NewStateStore(),
-		PS:              ps,
-		Logger:          logger.Named("engine"),
-		EventChannel:    ps.Subscribe(),
+
+		PS:           ps,
+		EventChannel: ps.Subscribe(),
+
+		actionQueue: make(chan *rules.Action),
+		nWorkers:    nWorkers,
+
+		Logger: logger.Named("engine"),
 	}
+
+	err := e.Init(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return e, nil
 }
 
 func (e *Engine) Init(ctx context.Context) error {
@@ -43,7 +63,27 @@ func (e *Engine) Init(ctx context.Context) error {
 	go func() {
 		e.watchRules(ctx)
 	}()
+
+	e.startWorkers()
 	return nil
+}
+
+func (e *Engine) queueAction(a *rules.Action) {
+	e.actionQueue <- a
+}
+
+func (e *Engine) startWorkers() {
+	for i := 0; i < e.nWorkers; i++ {
+		e.wg.Add(1)
+		go func(id int) {
+			defer e.wg.Done()
+			for action := range e.actionQueue {
+				if err := e.executeAction(action); err != nil {
+					e.Logger.Error("Failed to execute action", zap.Int("worker", id), zap.String("service", action.Service), zap.Error(err))
+				}
+			}
+		}(i)
+	}
 }
 
 func (e *Engine) RegisterIntegration(i Integration) {

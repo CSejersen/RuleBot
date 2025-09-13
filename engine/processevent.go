@@ -26,6 +26,8 @@ func (e *Engine) ProcessEvents(ctx context.Context) {
 }
 
 func (e *Engine) processEvent(event pubsub.Event) error {
+	e.StateStore.ApplyEvent(event)
+
 	for _, rule := range e.RuleSet.Rules {
 		if !rule.Trigger.Matches(event) {
 			continue
@@ -35,20 +37,19 @@ func (e *Engine) processEvent(event pubsub.Event) error {
 			continue
 		}
 
-		// apply event to update engine internal state
-		e.StateStore.ApplyEvent(event)
-
-		// execute actions
-		for _, action := range rule.Action {
+		for i, action := range rule.Action {
 			resolved := action.ResolveTemplatedParams(event)
 			action.Params = resolved
-			err := e.executeAction(&action)
-			if err != nil {
-				return fmt.Errorf("failed to execute action: %w", err)
-			}
+			e.Logger.Info("match found, queuing action", zap.String("rule", rule.Alias), zap.Int("action_number", i+1))
+			e.queueAction(&action)
 		}
 	}
 	return nil
+}
+
+func (e *Engine) Shutdown() {
+	close(e.actionQueue)
+	e.wg.Wait()
 }
 
 func (e *Engine) executeAction(a *rules.Action) error {
