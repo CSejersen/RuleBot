@@ -1,12 +1,12 @@
-package actionexecutor
+package client
 
-// Registry: human-readableID -> hueID
-type Registry struct {
+// DeviceRegistry: human-readableID -> hueID
+type DeviceRegistry struct {
 	lights map[string]string
 	rooms  map[string]string
 }
 
-func (r *Registry) Resolve(typ, humanId string) (string, bool) {
+func (r *DeviceRegistry) Resolve(typ, humanId string) (string, bool) {
 	switch typ {
 	case "light":
 		val, ok := r.lights[humanId]
@@ -19,21 +19,21 @@ func (r *Registry) Resolve(typ, humanId string) (string, bool) {
 }
 
 // InitRegistry init registry of human-readable id's
-func (e *Executor) InitRegistry() error {
-	e.Registry = Registry{
+func (c *Client) InitRegistry() error {
+	c.DeviceRegistry = DeviceRegistry{
 		lights: make(map[string]string),
 		rooms:  make(map[string]string),
 	}
 
 	// Lights
-	lights, err := e.Client.Lights()
+	lights, err := c.Lights()
 	if err != nil {
 		return err
 	}
 	for _, light := range lights {
-		e.Registry.lights[light.Metadata.Name] = light.ID
+		c.DeviceRegistry.lights[light.Metadata.Name] = light.ID
 	}
 
-	// TODO: add more entity types to the Registry
+	// TODO: add more entity types to the DeviceRegistry
 	return nil
 }

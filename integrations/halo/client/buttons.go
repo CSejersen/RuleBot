@@ -18,25 +18,18 @@ type UpdateButtonContent struct {
 	Icon string `json:"icon,omitempty"`
 }
 
-func (c *Client) UpdateButtonValue(name string, val int) error {
-	btnID, err := c.ResolveBtnId(name)
-	if err != nil {
-		c.Logger.Error("Failed to resolve button id", zap.String("name", name), zap.Error(err))
-		return err
-	}
+func (c *Client) UpdateButtonValue(id string, val int) error {
 
 	update := UpdateCommand[UpdateButton]{
 		Update: UpdateButton{
 			Type:  "button",
-			Id:    btnID,
+			Id:    id,
 			Value: val,
 			Content: UpdateButtonContent{
 				Icon: "lights",
 			},
 		},
 	}
-
-	c.Logger.Info("Updating button", zap.String("name", name), zap.Int("value", val), zap.Any("update", update))
 
 	bytes, err := json.Marshal(update)
 	if err != nil {

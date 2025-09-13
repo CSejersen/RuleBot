@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/engine"
-	"home_automation_server/integrations/hue/actionexecutor"
-	"home_automation_server/integrations/hue/apiclient"
+	"home_automation_server/engine/pubsub"
+	hueclient "home_automation_server/integrations/hue/client"
 	"home_automation_server/integrations/hue/eventsource"
+	"home_automation_server/integrations/hue/service"
 	"home_automation_server/integrations/hue/translator"
-	"home_automation_server/pubsub"
 	"os"
 )
 
@@ -17,22 +17,28 @@ func NewHueIntegration(baseLogger *zap.Logger) (engine.Integration, error) {
 	ip := os.Getenv("HUE_IP")
 	appKey := os.Getenv("HUE_APP_KEY")
 
-	client := apiclient.New(ip, appKey, logger.Named("client"))
-	executor, err := actionexecutor.New(client, logger.Named("action_executor"))
+	client, err := hueclient.New(ip, appKey, logger.Named("client"))
 	if err != nil {
-		return engine.Integration{}, fmt.Errorf("failed to construct 'Hue Integration: %w", err)
+		return engine.Integration{}, fmt.Errorf("falied to construct hue integration: %w", err)
 	}
+
 	source := eventsource.New(ip, appKey, logger.Named("event_source"))
 	trans, err := translator.New(client, logger.Named("translator"))
 	if err != nil {
-		return engine.Integration{}, fmt.Errorf("failed to construct 'Hue Integration: %w", err)
+		return engine.Integration{}, fmt.Errorf("failed to construct hue integration: %w", err)
+	}
+
+	s := service.Service{
+		Client: client,
+		Logger: logger.Named("service"),
 	}
 
 	return engine.Integration{
-		EventSource:    source,
-		Translator:     trans,
-		ActionExecutor: executor,
-		Aggregator:     &PassThroughAggregator{},
+		Name:        "hue",
+		EventSource: source,
+		Translator:  trans,
+		Aggregator:  &PassThroughAggregator{},
+		Services:    s.ExportServices(),
 	}, nil
 }
 

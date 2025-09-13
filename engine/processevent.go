@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"go.uber.org/zap"
+	"home_automation_server/engine/pubsub"
 	"home_automation_server/engine/rules"
-	"home_automation_server/pubsub"
+	"strings"
 )
 
 func (e *Engine) ProcessEvents(ctx context.Context) {
@@ -25,18 +26,25 @@ func (e *Engine) ProcessEvents(ctx context.Context) {
 }
 
 func (e *Engine) processEvent(event pubsub.Event) error {
-	//e.Logger.Info("processing event", zap.String("source", event.Source), zap.String("type", event.Type))
 	for _, rule := range e.RuleSet.Rules {
-		if rule.When.Matches(event) {
-			//e.Logger.Info("rule match found, executing actions")
-			for _, action := range rule.Then {
-				resolved := action.ResolveTemplatedParams(event) // resolve templated strings
-				e.Logger.Debug("resolved templated params", zap.Any("params", resolved))
-				action.Params = resolved
-				err := e.executeAction(&action)
-				if err != nil {
-					return fmt.Errorf("failed to execute action: %w", err)
-				}
+		if !rule.Trigger.Matches(event) {
+			continue
+		}
+
+		if !rule.ConditionsMatch(e.StateStore) {
+			continue
+		}
+
+		// apply event to update engine internal state
+		e.StateStore.ApplyEvent(event)
+
+		// execute actions
+		for _, action := range rule.Action {
+			resolved := action.ResolveTemplatedParams(event)
+			action.Params = resolved
+			err := e.executeAction(&action)
+			if err != nil {
+				return fmt.Errorf("failed to execute action: %w", err)
 			}
 		}
 	}
@@ -44,9 +52,17 @@ func (e *Engine) processEvent(event pubsub.Event) error {
 }
 
 func (e *Engine) executeAction(a *rules.Action) error {
-	integration, ok := e.Integrations[a.ResolveExecutorName()]
-	if !ok {
-		return fmt.Errorf("'%s' integration not found", a.ResolveExecutorName())
+	split := strings.Split(a.Service, ".")
+	if len(split) != 2 {
+		return fmt.Errorf("invalid service format: %s", a.Service)
 	}
-	return integration.ActionExecutor.ExecuteAction(a)
+
+	domain := split[0]
+	service := split[1]
+
+	e.Logger.Debug("Calling service", zap.String("service", a.Service), zap.Any("params", a.Params))
+	if err := e.ServiceRegistry.Call(domain, service, a); err != nil {
+		return err
+	}
+	return nil
 }

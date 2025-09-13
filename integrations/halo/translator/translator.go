@@ -3,9 +3,9 @@ package translator
 import (
 	"errors"
 	"go.uber.org/zap"
+	"home_automation_server/engine/pubsub"
 	"home_automation_server/integrations/halo/client"
 	"home_automation_server/integrations/halo/translator/events"
-	"home_automation_server/pubsub"
 	"time"
 )
 

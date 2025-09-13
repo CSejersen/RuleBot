@@ -5,28 +5,33 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
+	"home_automation_server/engine/pubsub"
 	"home_automation_server/engine/rules"
-	"home_automation_server/pubsub"
+	"home_automation_server/engine/statestore"
 	"os"
 )
 
 type Engine struct {
-	Integrations map[string]Integration
-	RuleSet      rules.RuleSet
-	PS           *pubsub.PubSub
-	Logger       *zap.Logger
-	EventChannel <-chan pubsub.Event
+	RuleSet         rules.RuleSet
+	Integrations    map[string]Integration
+	ServiceRegistry *ServiceRegistry
+	StateStore      *statestore.StateStore
+	PS              *pubsub.PubSub
+	Logger          *zap.Logger
+	EventChannel    <-chan pubsub.Event
 }
 
 func New(logger *zap.Logger) *Engine {
 	ps := pubsub.NewPubSub()
 
 	return &Engine{
-		Integrations: make(map[string]Integration),
-		RuleSet:      rules.RuleSet{},
-		PS:           ps,
-		Logger:       logger.Named("engine"),
-		EventChannel: ps.Subscribe(),
+		RuleSet:         rules.RuleSet{},
+		Integrations:    make(map[string]Integration),
+		ServiceRegistry: newServiceRegistry(),
+		StateStore:      statestore.NewStateStore(),
+		PS:              ps,
+		Logger:          logger.Named("engine"),
+		EventChannel:    ps.Subscribe(),
 	}
 }
 
@@ -39,6 +44,19 @@ func (e *Engine) Init(ctx context.Context) error {
 		e.watchRules(ctx)
 	}()
 	return nil
+}
+
+func (e *Engine) RegisterIntegration(i Integration) {
+	e.Integrations[i.Name] = i
+
+	for service, handler := range i.Services {
+		e.Logger.Debug("registering service", zap.String("service", service))
+		e.RegisterService(i.Name, service, handler)
+	}
+}
+
+func (e *Engine) RegisterService(domain, service string, handler ServiceHandler) {
+	e.ServiceRegistry.Register(domain, service, handler)
 }
 
 func (e *Engine) loadRules() error {

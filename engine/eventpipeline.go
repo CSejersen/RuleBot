@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 	"go.uber.org/zap"
-	"home_automation_server/pubsub"
+	"home_automation_server/engine/pubsub"
 	"time"
 )
 
@@ -49,7 +49,6 @@ func (p *EventPipeline) run(ctx context.Context) error {
 		case raw := <-rawCh:
 			events, err := p.Translator.Translate(raw)
 			if err != nil {
-				p.Logger.Warn("failed to translate event", zap.Error(err))
 				continue
 			}
 			for _, e := range events {

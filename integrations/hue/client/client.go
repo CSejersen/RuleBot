@@ -1,4 +1,4 @@
-package apiclient
+package client
 
 import (
 	"bytes"
@@ -13,21 +13,27 @@ import (
 
 type HueType string
 
-type ApiClient struct {
-	IP     string
-	AppKey string
-	client *http.Client
-	Logger *zap.Logger
+type Client struct {
+	IP             string
+	AppKey         string
+	DeviceRegistry DeviceRegistry // human-readableID -> hueID
+	client         *http.Client
+	Logger         *zap.Logger
 }
 
-func New(ip string, appKey string, logger *zap.Logger) *ApiClient {
-	c := &ApiClient{
+func New(ip string, appKey string, logger *zap.Logger) (*Client, error) {
+	c := &Client{
 		IP:     ip,
 		AppKey: appKey,
 		client: newHTTPClient(),
 		Logger: logger,
 	}
-	return c
+
+	if err := c.InitRegistry(); err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
 func newHTTPClient() *http.Client {
@@ -38,19 +44,19 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-func (c *ApiClient) get(path string, v interface{}) error {
+func (c *Client) get(path string, v interface{}) error {
 	return c.doApiV2Request(http.MethodGet, path, nil, v)
 }
 
-func (c *ApiClient) post(path string, body, v interface{}) error {
+func (c *Client) post(path string, body, v interface{}) error {
 	return c.doApiV2Request(http.MethodPost, path, body, v)
 }
 
-func (c *ApiClient) put(path string, body, v interface{}) error {
+func (c *Client) put(path string, body, v interface{}) error {
 	return c.doApiV2Request(http.MethodPut, path, body, v)
 }
 
-func (c *ApiClient) doApiV2Request(method, path string, body interface{}, v interface{}) error {
+func (c *Client) doApiV2Request(method, path string, body interface{}, v interface{}) error {
 	url := fmt.Sprintf("https://%s/clip/v2/%s", c.IP, path)
 
 	var bodyReader io.Reader

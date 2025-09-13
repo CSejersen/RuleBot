@@ -1,7 +1,8 @@
 package rules
 
 import (
-	"home_automation_server/pubsub"
+	"home_automation_server/engine/pubsub"
+	"home_automation_server/engine/statestore"
 	"regexp"
 	"strings"
 )
@@ -11,45 +12,48 @@ type RuleSet struct {
 }
 
 type Rule struct {
-	When Condition `yaml:"when"`
-	Then []Action  `yaml:"then"`
+	Alias     string      `yaml:"alias"`
+	Trigger   Trigger     `yaml:"trigger"`
+	Condition []Condition `yaml:"condition"`
+	Action    []Action    `yaml:"action"`
 }
 
-type Condition struct {
-	Source      string         `yaml:"source"`
-	Type        string         `yaml:"type"`
-	Entity      string         `yaml:"entity"`
-	StateChange string         `yaml:"state_change"`
-	Conditions  map[string]any `yaml:"conditions,omitempty"`
+type Trigger struct {
+	Event       string `yaml:"event"`
+	Entity      string `yaml:"entity_name"`
+	StateChange string `yaml:"state_change"`
 }
 
 // TODO: Validate Rule config on start up
 
-func (c *Condition) Matches(event pubsub.Event) bool {
-	if normalizeString(event.Source) != normalizeString(c.Source) {
-		return false
-	}
-	if normalizeString(event.Type) != normalizeString(c.Type) {
-		return false
-	}
-	if normalizeString(event.Entity) != normalizeString(c.Entity) {
-		return false
-	}
-	if normalizeString(event.StateChange) != normalizeString(c.StateChange) {
-		return false
-	}
-
-	for key, expected := range c.Conditions {
-		if _, ok := event.Payload[key]; !ok {
+func (r *Rule) ConditionsMatch(s *statestore.StateStore) bool {
+	for _, condition := range r.Condition {
+		if !condition.Matches(s) {
 			return false
 		}
+	}
+	return true
+}
 
-		// TODO: Extend conditions to allow for "in: ["movie", "reading"]" or ">=: 10"
-		// to achieve that we can default to strict equality for primitive types
-		// but if the parsed yaml gives a map we can switch on the operator ("in", "between", "<" ...) to decide if it's a match.
-		if expected != event.Payload[key] {
-			return false
-		}
+func (t *Trigger) Matches(event pubsub.Event) bool {
+	split := strings.Split(t.Event, ".")
+	if len(split) != 2 {
+		return false
+	}
+	triggerSource := split[0]
+	triggerType := split[1]
+
+	if normalizeString(event.Source) != normalizeString(triggerSource) {
+		return false
+	}
+	if normalizeString(event.Type) != normalizeString(triggerType) {
+		return false
+	}
+	if normalizeString(event.Entity) != normalizeString(t.Entity) {
+		return false
+	}
+	if normalizeString(event.StateChange) != normalizeString(t.StateChange) {
+		return false
 	}
 	return true
 }

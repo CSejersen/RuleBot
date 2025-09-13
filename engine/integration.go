@@ -3,8 +3,8 @@ package engine
 import (
 	"context"
 	"go.uber.org/zap"
+	"home_automation_server/engine/pubsub"
 	"home_automation_server/engine/rules"
-	"home_automation_server/pubsub"
 )
 
 type EventSource interface {
@@ -15,24 +15,19 @@ type EventTranslator interface {
 	Translate(raw []byte) ([]pubsub.Event, error)
 }
 
-type ActionExecutor interface {
-	ExecuteAction(action *rules.Action) error
-}
-
 type EventAggregator interface {
 	Aggregate(pubsub.Event) *pubsub.Event
 	Flush() *pubsub.Event
 }
 
-type Integration struct {
-	EventSource    EventSource
-	Translator     EventTranslator
-	ActionExecutor ActionExecutor
-	Aggregator     EventAggregator
-}
+type ServiceHandler func(action *rules.Action) error
 
-func (e *Engine) RegisterIntegration(label string, integration Integration) {
-	e.Integrations[label] = integration
+type Integration struct {
+	Name        string
+	EventSource EventSource
+	Translator  EventTranslator
+	Aggregator  EventAggregator
+	Services    map[string]ServiceHandler // key = "domain.service"
 }
 
 func IntegrationLogger(base *zap.Logger, name string) *zap.Logger {

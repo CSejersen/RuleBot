@@ -2,8 +2,8 @@ package eventaggregator
 
 import (
 	"go.uber.org/zap"
+	"home_automation_server/engine/pubsub"
 	"home_automation_server/integrations/halo/translator"
-	"home_automation_server/pubsub"
 	"sync"
 )
 

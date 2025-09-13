@@ -1,0 +1,63 @@
+package rules
+
+import (
+	"home_automation_server/engine/statestore"
+	"strings"
+)
+
+type Condition struct {
+	Entity string `yaml:"entity"` // Integration.Type.Entity_name
+	Field  string `yaml:"field"`  // "brightness"
+
+	// Comparison operators
+	Equals      interface{} `yaml:"equals,omitempty"`
+	NotEquals   interface{} `yaml:"not_equals,omitempty"`
+	GreaterThan *float64    `yaml:"gt,omitempty"`
+	LessThan    *float64    `yaml:"lt,omitempty"`
+}
+
+func (c *Condition) Matches(store *statestore.StateStore) bool {
+	splitEntity := strings.Split(c.Entity, ".")
+	if len(splitEntity) != 3 {
+		return false
+	}
+	source := splitEntity[0]
+	typ := splitEntity[1]
+	entity := splitEntity[2]
+
+	// TODO: add support for system-wide pseudo-entities like system.time.now
+
+	state, ok := store.GetState(source, typ, entity)
+	if !ok {
+		return false
+	}
+
+	val, exists := state.Values[c.Field]
+	if !exists {
+		return false
+	}
+
+	if c.Equals != nil && val != c.Equals {
+		return false
+	}
+	if c.NotEquals != nil && val == c.NotEquals {
+		return false
+	}
+
+	if c.GreaterThan != nil {
+		num, ok := val.(float64)
+		if !ok || num <= *c.GreaterThan {
+			return false
+		}
+	}
+	if c.LessThan != nil {
+		num, ok := val.(float64)
+		if !ok || num >= *c.LessThan {
+			return false
+		}
+	}
+
+	// Template evaluation
+
+	return true
+}

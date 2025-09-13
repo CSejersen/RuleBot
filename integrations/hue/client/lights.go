@@ -1,52 +1,11 @@
-package apiclient
+package client
 
 import (
 	"fmt"
 	"go.uber.org/zap"
 )
 
-type Light struct {
-	Type     string        `json:"type"`
-	ID       string        `json:"id"`
-	Metadata LightMetadata `json:"metadata"`
-	On       LightOn       `json:"on"`
-	Dimming  LightDimming  `json:"dimming"`
-}
-
-type LightStepBrightnessRequest struct {
-	DimmingDelta DimmingDelta `json:"dimming_delta"`
-}
-
-type LightDimming struct {
-	Brightness float64 `json:"brightness"`
-}
-
-type DimmingDelta struct {
-	Action          string  `json:"action"`
-	BrightnessDelta float64 `json:"brightness_delta"`
-}
-
-type LightOn struct {
-	On bool
-}
-
-type LightMetadata struct {
-	Name string `json:"name"`
-}
-
-type getLightsResponse struct {
-	Data []Light `json:"data"`
-}
-
-type apiResponse struct {
-	Errors []SetBrightnessError `json:"errors"`
-}
-
-type SetBrightnessError struct {
-	Error string `json:"error"`
-}
-
-func (c *ApiClient) Lights() ([]Light, error) {
+func (c *Client) Lights() ([]Light, error) {
 	var resp getLightsResponse
 	err := c.get("resource/light", &resp)
 	if err != nil {
@@ -57,7 +16,7 @@ func (c *ApiClient) Lights() ([]Light, error) {
 
 // LightSetBrightness sets brightness percentage of a light source.
 // value cannot be 0, writing 0 changes it to the lowest possible brightness
-func (c *ApiClient) LightSetBrightness(name string, val float64) error {
+func (c *Client) LightSetBrightness(name string, val float64) error {
 	lights, err := c.Lights()
 	if err != nil {
 		return fmt.Errorf("failed to get lights: %s", err)
@@ -81,7 +40,7 @@ func (c *ApiClient) LightSetBrightness(name string, val float64) error {
 	return nil
 }
 
-func (c *ApiClient) LightStepBrightness(id string, delta float64, action string) error {
+func (c *Client) LightStepBrightness(id string, delta float64, action string) error {
 	path := fmt.Sprintf("resource/light/%s", id)
 	req := LightStepBrightnessRequest{
 		DimmingDelta: DimmingDelta{Action: action, BrightnessDelta: delta},

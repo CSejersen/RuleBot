@@ -3,15 +3,15 @@ package translator
 import (
 	"fmt"
 	"go.uber.org/zap"
-	"home_automation_server/integrations/hue/apiclient"
+	"home_automation_server/engine/pubsub"
+	"home_automation_server/integrations/hue/client"
 	"home_automation_server/integrations/hue/translator/events"
-	"home_automation_server/pubsub"
 	"time"
 )
 
 // Translator translates a parsed hue event into a pubsub.Event
 type Translator struct {
-	Client      *apiclient.ApiClient
+	Client      *client.Client
 	EventParser EventParser
 	Logger      *zap.Logger
 
@@ -20,7 +20,7 @@ type Translator struct {
 }
 
 // New is the constructor for Translator
-func New(client *apiclient.ApiClient, logger *zap.Logger) (*Translator, error) {
+func New(client *client.Client, logger *zap.Logger) (*Translator, error) {
 	t := &Translator{
 		Client:      client,
 		EventParser: newEventParser(logger),

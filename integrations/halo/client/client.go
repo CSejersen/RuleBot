@@ -27,8 +27,6 @@ func New(addr, configPath string, logger *zap.Logger) (*Client, error) {
 		return nil, fmt.Errorf("failed to connect to beoremote halo websocket: %w", err)
 	}
 
-	logger.Debug("established connection to halo ws")
-
 	h := &Client{
 		Conn:   conn,
 		Logger: logger,

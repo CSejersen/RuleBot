@@ -38,14 +38,14 @@ func registerIntegrations(e *engine.Engine, logger *zap.Logger) {
 	if err != nil {
 		logger.Fatal("failed to init Hue integration", zap.Error(err))
 	}
-	e.RegisterIntegration("hue", hueIntegration)
+	e.RegisterIntegration(hueIntegration)
 
 	// Halo
 	haloIntegration, err := halo.NewHaloIntegration(logger)
 	if err != nil {
 		logger.Fatal("failed to init Halo integration", zap.Error(err))
 	}
-	e.RegisterIntegration("halo", haloIntegration)
+	e.RegisterIntegration(haloIntegration)
 }
 
 func runEngine(e *engine.Engine, logger *zap.Logger, ctx context.Context) {

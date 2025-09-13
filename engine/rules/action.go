@@ -2,23 +2,19 @@ package rules
 
 import (
 	"fmt"
-	"home_automation_server/pubsub"
+	"home_automation_server/engine/pubsub"
 	"strings"
 )
 
 type Action struct {
-	Action string         `yaml:"action"`
-	Target Target         `yaml:"target"`
-	Params map[string]any `yaml:"params,omitempty"`
+	Service string         `yaml:"service"`
+	Target  Target         `yaml:"target"`
+	Params  map[string]any `yaml:"params,omitempty"`
 }
 
 type Target struct {
 	Type string `yaml:"type"`
 	ID   string `yaml:"id"`
-}
-
-func (a *Action) ResolveExecutorName() string {
-	return strings.Split(a.Target.Type, ".")[0]
 }
 
 func (a *Action) ResolveTemplatedParams(event pubsub.Event) map[string]interface{} {

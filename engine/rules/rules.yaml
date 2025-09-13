@@ -1,54 +1,41 @@
 rules:
-  - when:
-      source: "hue"
-      type: "light"
-      entity: "flower_pot"
-      state_change: "brightness"
-    then:
-      - action: "update_button_value"
-        target:
-          type: "halo.button"
-          id: "Flower pot"
-        params:
-          value: "${payload.brightness}"
-
-  - when:
-      source: "halo"
-      type: "wheel"
-      entity: "flower_pot"
+  - alias: "Halo: Increase Flower Pot brightness"
+    trigger:
+      event: "halo.wheel"
+      entity_name: "Flower Pot"
       state_change: "clockwise"
-    then:
-      - action: "step_brightness"
+    action:
+      - service: "hue.step_brightness"
         target:
-          type: "hue.light"
+          type: "light"
           id: "Flower Pot"
         params:
           direction: "up"
           step: "${payload.step}"
 
-  - when:
-      source: "halo"
-      type: "wheel"
-      entity: "flower_pot"
+  - alias: "Halo: Decrease Flower Pot brightness"
+    trigger:
+      event: "halo.wheel"
+      entity_name: "Flower Pot"
       state_change: "counter_clockwise"
-    then:
-      - action: "step_brightness"
+    action:
+      - service: "hue.step_brightness"
         target:
-          type: "hue.light"
+          type: "light"
           id: "Flower Pot"
         params:
           direction: "down"
           step: "${payload.step}"
 
-  - when:
-      source: "halo"
-      type: "button"
-      entity: "movie"
-      state_change: "pressed"
-    then:
-      - action: "set_scene"
+  - alias: "Halo: update button with new hue state"
+    trigger:
+      event: "hue.light"
+      entity_name: "flower pot"
+      state_change: "brightness"
+    action:
+      - service: "halo.update_button_value"
         target:
-          type: "hue.room"
-          id: "stue"
+          type: "button"
+          id: "Flower pot"
         params:
-          scene: "movie"
+          value: "${payload.brightness}"
