@@ -32,7 +32,7 @@ func setupLogger() *zap.Logger {
 	return logger
 }
 
-func registerIntegrations(e *engine.Engine, logger *zap.Logger) {
+func registerIntegrations(ctx context.Context, e *engine.Engine, logger *zap.Logger) {
 	// Hue
 	hueIntegration, err := hue.NewHueIntegration(logger)
 	if err != nil {
@@ -41,7 +41,7 @@ func registerIntegrations(e *engine.Engine, logger *zap.Logger) {
 	e.RegisterIntegration(hueIntegration)
 
 	// Halo
-	haloIntegration, err := halo.NewHaloIntegration(logger)
+	haloIntegration, err := halo.NewHaloIntegration(ctx, logger)
 	if err != nil {
 		logger.Fatal("failed to init Halo integration", zap.Error(err))
 	}

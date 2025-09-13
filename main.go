@@ -22,7 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	registerIntegrations(e, logger)
+	registerIntegrations(ctx, e, logger)
 	runEngine(e, logger, ctx)
 
 	logger.Info("Engine bootstrap succeeded")

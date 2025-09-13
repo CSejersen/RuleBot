@@ -54,7 +54,7 @@ func (t *Translator) Translate(raw []byte) ([]pubsub.Event, error) {
 		return nil, err
 	}
 
-	// TODO: if switch cases grow beyond what is reasonable we could implement a map of event type to translator-func
+	// If number of switch cases grows beyond what is reasonable we could implement a map of event type to translator-func
 	switch event.GetType() {
 	case "wheel":
 		psEvent, err := t.translateWheelEvent(event)

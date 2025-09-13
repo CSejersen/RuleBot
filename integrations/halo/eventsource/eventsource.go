@@ -7,29 +7,24 @@ import (
 )
 
 type EventSource struct {
-	Client *client.Client
-	Logger *zap.Logger
+	ReceiveCh chan []byte
+	Logger    *zap.Logger
 }
 
 func New(c *client.Client, logger *zap.Logger) *EventSource {
 	return &EventSource{
-		Client: c,
-		Logger: logger,
+		ReceiveCh: c.ReceiveCh,
+		Logger:    logger,
 	}
 }
 
 func (s EventSource) Run(ctx context.Context, out chan<- []byte) error {
 	for {
-		_, msg, err := s.Client.Conn.ReadMessage()
-		if err != nil {
-			s.Logger.Error("failed to read message", zap.Error(err))
-			return err
-		}
-
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case out <- msg:
+		case msg := <-s.ReceiveCh:
+			out <- msg
 		}
 	}
 }
