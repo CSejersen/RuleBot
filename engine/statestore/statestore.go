@@ -3,6 +3,8 @@ package statestore
 import (
 	"fmt"
 	"home_automation_server/engine/pubsub"
+	"home_automation_server/utils"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,7 +18,7 @@ type State struct {
 	Integration string
 	Type        string
 	Entity      string
-	Values      map[string]interface{}
+	Fields      map[string]any
 	LastSeen    time.Time
 }
 
@@ -28,7 +30,7 @@ func NewStateStore() *StateStore {
 
 // key generates a unique key for the entity
 func makeKey(source, typ, entity string) string {
-	return fmt.Sprintf("%s:%s:%s", source, typ, entity)
+	return fmt.Sprintf("%s:%s:%s", utils.NormalizeString(source), utils.NormalizeString(typ), utils.NormalizeString(entity))
 }
 
 // ApplyEvent updates state based on an incoming event
@@ -41,19 +43,19 @@ func (s *StateStore) ApplyEvent(e pubsub.Event) {
 	state, ok := s.states[key]
 	if !ok {
 		state = &State{
-			Integration: e.Source,
-			Type:        e.Type,
-			Entity:      e.Entity,
-			Values:      make(map[string]interface{}),
+			Integration: utils.NormalizeString(e.Source),
+			Type:        utils.NormalizeString(e.Type),
+			Entity:      utils.NormalizeString(e.Entity),
+			Fields:      make(map[string]interface{}),
 			LastSeen:    time.Now(),
 		}
 		s.states[key] = state
 	}
 
 	for k, v := range e.Payload {
-		state.Values[k] = v
+		state.Fields[utils.NormalizeString(k)] = v
 	}
-	state.Values["last_state_change"] = e.StateChange
+	state.Fields["last_state_change"] = e.StateChange
 	state.LastSeen = e.Time
 }
 
@@ -64,4 +66,22 @@ func (s *StateStore) GetState(source, typ, entity string) (*State, bool) {
 	defer s.mu.RUnlock()
 	state, ok := s.states[key]
 	return state, ok
+}
+
+func (s *StateStore) ResolvePath(path string) any {
+	split := strings.Split(path, ":")
+	if len(split) == 2 {
+		return nil
+	}
+	value := split[1]
+
+	obj := strings.Split(split[0], ".")
+	source := obj[0]
+	typ := obj[1]
+	entity := obj[2]
+
+	if state, ok := s.GetState(source, typ, entity); ok {
+		return state.Fields[utils.NormalizeString(value)]
+	}
+	return nil
 }

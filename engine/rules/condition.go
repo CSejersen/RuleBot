@@ -32,7 +32,7 @@ func (c *Condition) Matches(store *statestore.StateStore) bool {
 		return false
 	}
 
-	val, exists := state.Values[c.Field]
+	val, exists := state.Fields[c.Field]
 	if !exists {
 		return false
 	}

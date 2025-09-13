@@ -2,8 +2,11 @@ package rules
 
 import (
 	"fmt"
-	"home_automation_server/engine/pubsub"
-	"strings"
+)
+
+const (
+	ParamPrefixPayload = "${payload."
+	ParamPrefixState   = "${state."
 )
 
 type Action struct {
@@ -17,27 +20,9 @@ type Target struct {
 	ID   string `yaml:"id"`
 }
 
-func (a *Action) ResolveTemplatedParams(event pubsub.Event) map[string]interface{} {
-	resolved := make(map[string]interface{})
-	for k, v := range a.Params {
-		switch val := v.(type) {
-		case string:
-			// template syntax ${payload.field}
-			if strings.HasPrefix(val, "${payload.") && strings.HasSuffix(val, "}") {
-				field := val[len("${payload.") : len(val)-1]
-				if value, ok := event.Payload[field]; ok {
-					resolved[k] = value
-				} else {
-					resolved[k] = nil
-				}
-			} else {
-				resolved[k] = val
-			}
-		default:
-			resolved[k] = val
-		}
-	}
-	return resolved
+type TemplateRef struct {
+	Source string // "payload", "state" ..
+	Path   string
 }
 
 func (a *Action) FloatParam(key string) (float64, error) {

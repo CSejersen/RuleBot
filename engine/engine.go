@@ -9,6 +9,7 @@ import (
 	"home_automation_server/engine/rules"
 	"home_automation_server/engine/statestore"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -146,4 +147,48 @@ func (e *Engine) watchRules(ctx context.Context) {
 			e.Logger.Warn("rules watcher error", zap.Error(err))
 		}
 	}
+}
+
+func (e *Engine) ResolveActionParams(action rules.Action, event pubsub.Event) map[string]interface{} {
+	e.Logger.Debug("Resolving action params", zap.Any("actionParams", action.Params), zap.Any("eventPayload", event.Payload))
+	resolved := make(map[string]interface{})
+	for k, v := range action.Params {
+		switch val := v.(type) {
+		case string:
+			if ref, ok := parseTemplate(val); ok {
+				e.Logger.Debug("param is templated")
+				// param is templated
+				switch ref.Source {
+				case "payload":
+					e.Logger.Debug("resolving param from Payload")
+					if value, ok := event.Payload[ref.Path]; ok {
+						resolved[k] = value
+					} else {
+						e.Logger.Debug("param not found in payload")
+						resolved[k] = nil
+					}
+				case "state":
+					value := e.StateStore.ResolvePath(ref.Path)
+					resolved[k] = value
+				}
+			} else {
+				e.Logger.Debug("param is not templated")
+				// params is a non templated string
+				resolved[k] = val
+			}
+		default:
+			resolved[k] = val
+		}
+	}
+	return resolved
+}
+
+func parseTemplate(val string) (*rules.TemplateRef, bool) {
+	if strings.HasPrefix(val, rules.ParamPrefixPayload) && strings.HasSuffix(val, "}") {
+		return &rules.TemplateRef{Source: "payload", Path: val[len(rules.ParamPrefixPayload) : len(val)-1]}, true
+	}
+	if strings.HasPrefix(val, rules.ParamPrefixState) && strings.HasSuffix(val, "}") {
+		return &rules.TemplateRef{Source: "state", Path: val[len(rules.ParamPrefixState) : len(val)-1]}, true
+	}
+	return nil, false
 }

@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -43,6 +44,17 @@ func (c *Client) UpdateButtonValue(id string, val int) error {
 	}
 
 	return nil
+}
+
+func (c *Client) ResolveBtnId(name string) (string, error) {
+	for _, page := range c.Config.Pages {
+		for _, button := range page.Buttons {
+			if button.Title == name {
+				return button.ID, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("could not find button: %s", name)
 }
 
 func (c *Client) Buttons() []*Button {

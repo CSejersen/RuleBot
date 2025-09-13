@@ -38,7 +38,7 @@ func (e *Engine) processEvent(event pubsub.Event) error {
 		}
 
 		for i, action := range rule.Action {
-			resolved := action.ResolveTemplatedParams(event)
+			resolved := e.ResolveActionParams(action, event)
 			action.Params = resolved
 			e.Logger.Info("match found, queuing action", zap.String("rule", rule.Alias), zap.Int("action_number", i+1))
 			e.queueAction(&action)

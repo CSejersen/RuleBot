@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 	"time"
@@ -86,15 +85,4 @@ func (c *Client) writeLoop(done chan<- struct{}) {
 			return
 		}
 	}
-}
-
-func (c *Client) ResolveBtnId(name string) (string, error) {
-	for _, page := range c.Config.Pages {
-		for _, button := range page.Buttons {
-			if button.Title == name {
-				return button.ID, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("could not find button: %s", name)
 }

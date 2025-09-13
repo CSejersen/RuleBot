@@ -39,3 +39,16 @@ rules:
           id: "Flower pot"
         params:
           value: "${payload.brightness}"
+
+  - alias: "Halo: on connect"
+    trigger:
+      event: "halo.system"
+      state_change: "active"
+    action:
+        - service: "halo.update_button_value"
+          target:
+            type: "button"
+            id: "Flower pot"
+          params:
+            value: "${state.hue.light.flower_pot:brightness}"
+
