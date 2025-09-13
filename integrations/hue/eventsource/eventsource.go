@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type EventSource struct {
@@ -26,6 +27,22 @@ func New(ip string, appKey string, logger *zap.Logger) *EventSource {
 }
 
 func (s *EventSource) Run(ctx context.Context, out chan<- []byte) error {
+	for {
+		err := s.connectAndStream(ctx, out)
+		if err != nil {
+			s.Logger.Error("hue event stream disconnected", zap.Error(err))
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second * 3):
+			continue // attempt to reconnect
+		}
+	}
+}
+
+func (s *EventSource) connectAndStream(ctx context.Context, out chan<- []byte) error {
 	url := fmt.Sprintf("https://%s/eventstream/clip/v2", s.IP)
 
 	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -43,6 +60,7 @@ func (s *EventSource) Run(ctx context.Context, out chan<- []byte) error {
 		return err
 	}
 	defer resp.Body.Close()
+	s.Logger.Info("hue event stream connected", zap.String("url", url))
 
 	scanner := bufio.NewScanner(resp.Body)
 	var buffer bytes.Buffer
