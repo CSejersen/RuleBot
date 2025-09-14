@@ -14,11 +14,11 @@ import (
 type HueType string
 
 type Client struct {
-	IP             string
-	AppKey         string
-	DeviceRegistry DeviceRegistry // human-readableID -> hueID
-	client         *http.Client
-	Logger         *zap.Logger
+	IP               string
+	AppKey           string
+	ResourceRegistry ResourceRegistry // human-readableID -> hueID
+	client           *http.Client
+	Logger           *zap.Logger
 }
 
 func New(ip string, appKey string, logger *zap.Logger) (*Client, error) {
@@ -29,7 +29,7 @@ func New(ip string, appKey string, logger *zap.Logger) (*Client, error) {
 		Logger: logger,
 	}
 
-	if err := c.InitRegistry(); err != nil {
+	if err := c.InitResourceRegistry(); err != nil {
 		return nil, err
 	}
 

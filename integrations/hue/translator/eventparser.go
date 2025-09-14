@@ -68,7 +68,7 @@ func (p *EventParser) parse(b []byte) (EventBatch, error) {
 
 			constructor, ok := p.EventRegistry[typeWrapper.Type]
 			if !ok {
-				//p.Logger.Info("Unsupported event type, skipping", zap.String("type", typeWrapper.Type))
+				//p.Logger.Info("Unsupported event type, skipping", zap.String("type", typeWrapper.Typ))
 				continue
 			}
 

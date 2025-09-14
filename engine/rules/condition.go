@@ -6,7 +6,7 @@ import (
 )
 
 type Condition struct {
-	Entity string `yaml:"entity"` // Integration.Type.Entity_name
+	Entity string `yaml:"entity"` // Integration.Typ.Entity_name
 	Field  string `yaml:"field"`  // "brightness"
 
 	// Comparison operators

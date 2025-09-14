@@ -2,11 +2,8 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/engine/pubsub"
-	"home_automation_server/engine/rules"
-	"strings"
 )
 
 func (e *Engine) ProcessEvents(ctx context.Context) {
@@ -50,20 +47,4 @@ func (e *Engine) processEvent(event pubsub.Event) error {
 func (e *Engine) Shutdown() {
 	close(e.actionQueue)
 	e.wg.Wait()
-}
-
-func (e *Engine) executeAction(a *rules.Action) error {
-	split := strings.Split(a.Service, ".")
-	if len(split) != 2 {
-		return fmt.Errorf("invalid service format: %s", a.Service)
-	}
-
-	domain := split[0]
-	service := split[1]
-
-	e.Logger.Debug("Calling service", zap.String("service", a.Service), zap.Any("params", a.Params))
-	if err := e.ServiceRegistry.Call(domain, service, a); err != nil {
-		return err
-	}
-	return nil
 }

@@ -37,10 +37,11 @@ func (c *Client) Run(ctx context.Context, addr string) {
 		if err != nil {
 			c.Logger.Warn("failed to connect to halo ws", zap.Error(err))
 			select {
-			case <-time.After(5 * time.Second):
-				continue
 			case <-ctx.Done():
 				return
+			default:
+				time.Sleep(50 * time.Millisecond)
+				continue
 			}
 		}
 

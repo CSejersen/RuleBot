@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -85,6 +86,22 @@ func (e *Engine) startWorkers() {
 			}
 		}(i)
 	}
+}
+
+func (e *Engine) executeAction(a *rules.Action) error {
+	split := strings.Split(a.Service, ".")
+	if len(split) != 2 {
+		return fmt.Errorf("invalid service format: %s", a.Service)
+	}
+
+	domain := split[0]
+	service := split[1]
+
+	e.Logger.Debug("Calling service", zap.String("service", a.Service), zap.Any("params", a.Params))
+	if err := e.ServiceRegistry.Call(domain, service, a); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (e *Engine) RegisterIntegration(i Integration) {

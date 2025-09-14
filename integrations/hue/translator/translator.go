@@ -15,7 +15,7 @@ type Translator struct {
 	EventParser EventParser
 	Logger      *zap.Logger
 
-	// Registry: Type + ID -> Human-readable name
+	// Registry: Typ + ID -> Human-readable name
 	Registry map[string]map[string]string
 }
 

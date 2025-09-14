@@ -63,10 +63,42 @@ func (t *Translator) Translate(raw []byte) ([]pubsub.Event, error) {
 			return []pubsub.Event{}, err
 		}
 		return []pubsub.Event{psEvent}, nil
+
+	case "button":
+		psEvent, err := t.translateButtonEvent(event)
+		if err != nil {
+			t.Logger.Error("failed to translate button event", zap.Error(err))
+			return []pubsub.Event{}, err
+		}
+		return []pubsub.Event{psEvent}, nil
+
+	case "system":
+		psEvent, err := t.translateSystemEvent(event)
+		if err != nil {
+			t.Logger.Error("failed to translate system event", zap.Error(err))
+			return []pubsub.Event{}, err
+		}
+		return []pubsub.Event{psEvent}, nil
+
 	default:
 		t.Logger.Info("translator not implemented, skipping event", zap.String("type", event.GetType()))
 	}
 	return []pubsub.Event{}, nil
+}
+
+func (t *Translator) translateSystemEvent(e events.Event) (pubsub.Event, error) {
+	sysEvent, ok := e.(*events.SystemEvent)
+	if !ok {
+		return pubsub.Event{}, nil
+	}
+
+	return pubsub.Event{
+		Source:      "halo",
+		Type:        "system",
+		StateChange: sysEvent.State,
+		Payload:     map[string]any{},
+		Time:        time.Now(),
+	}, nil
 }
 
 func (t *Translator) translateWheelEvent(e events.Event) (pubsub.Event, error) {
@@ -85,10 +117,31 @@ func (t *Translator) translateWheelEvent(e events.Event) (pubsub.Event, error) {
 		Type:        "wheel",
 		Entity:      humanID,
 		StateChange: ResolveWheelStateChange(wheelEvent.Counts),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"step": wheelEvent.Counts,
 		},
 		Time: time.Now(),
+	}, nil
+}
+
+func (t *Translator) translateButtonEvent(e events.Event) (pubsub.Event, error) {
+	buttonEvent, ok := e.(*events.ButtonEvent)
+	if !ok {
+		return pubsub.Event{}, errors.New("expected a *ButtonEvent for event type 'button'")
+	}
+
+	humanID, ok := t.LookupName(buttonEvent.ID)
+	if !ok {
+		t.Logger.Warn("failed to lookup human id", zap.String("id", buttonEvent.ID))
+	}
+
+	return pubsub.Event{
+		Source:      "halo",
+		Type:        "button",
+		Entity:      humanID,
+		StateChange: buttonEvent.State,
+		Payload:     nil,
+		Time:        time.Now(),
 	}, nil
 }
 

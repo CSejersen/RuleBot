@@ -27,7 +27,20 @@ rules:
           direction: "down"
           step: "${payload.step}"
 
-  - alias: "Halo: update button with new hue state"
+  - alias: "Halo: Toggle Flower Pot Light"
+    trigger:
+      event: "halo.button"
+      entity_name: "Flower Pot"
+      state_change: "pressed"
+    action:
+      - service: "hue.toggle"
+        target:
+          type: "light"
+          id: "Flower Pot"
+        params:
+          on: "${state.hue.light.flower_pot:on}"
+
+  - alias: "Halo: Update flower_pot button"
     trigger:
       event: "hue.light"
       entity_name: "flower pot"
@@ -35,20 +48,33 @@ rules:
     action:
       - service: "halo.update_button_value"
         target:
-          type: "button"
           id: "Flower pot"
         params:
           value: "${payload.brightness}"
+
+  - alias: "Halo: Set scene Movie"
+    trigger:
+      event: "halo.button"
+      state_change: "pressed"
+    action:
+      - service: "hue.set_scene"
+        target:
+          id: "movie"
+        params:
+          scene: "movie"
 
   - alias: "Halo: on connect"
     trigger:
       event: "halo.system"
       state_change: "active"
+    condition:
+      - entity: "hue.light.flower_pot"
+        field: "on"
+        in: true
     action:
-        - service: "halo.update_button_value"
-          target:
-            type: "button"
-            id: "Flower pot"
-          params:
-            value: "${state.hue.light.flower_pot:brightness}"
-
+      - service: "halo.update_button_value"
+        target:
+          id: "Flower pot"
+        params:
+          value: "${state.hue.light.flower_pot:brightness}"
+          toggle: "${state.hue.light.flower_pot:on}"

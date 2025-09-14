@@ -53,7 +53,9 @@ func (s *StateStore) ApplyEvent(e pubsub.Event) {
 	}
 
 	for k, v := range e.Payload {
-		state.Fields[utils.NormalizeString(k)] = v
+		if v != nil {
+			state.Fields[utils.NormalizeString(k)] = v
+		}
 	}
 	state.Fields["last_state_change"] = e.StateChange
 	state.LastSeen = e.Time
@@ -70,7 +72,7 @@ func (s *StateStore) GetState(source, typ, entity string) (*State, bool) {
 
 func (s *StateStore) ResolvePath(path string) any {
 	split := strings.Split(path, ":")
-	if len(split) == 2 {
+	if len(split) != 2 {
 		return nil
 	}
 	value := split[1]
