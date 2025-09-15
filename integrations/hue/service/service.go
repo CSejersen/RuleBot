@@ -22,16 +22,9 @@ func (s *Service) ExportServices() map[string]engine.ServiceHandler {
 }
 
 func (s *Service) StepBrightness(action *rules.Action) error {
-	if action.Target == nil {
-		return fmt.Errorf("no target found")
-	}
-	if action.Target.Typ == nil {
-		return fmt.Errorf("no target_type found")
-	}
-
-	id, ok := s.Client.ResourceRegistry.Resolve(*action.Target.Typ, action.Target.ID)
+	id, ok := s.Client.ResourceRegistry.Resolve(action.Target.Typ, action.Target.ID)
 	if !ok {
-		return fmt.Errorf("unable to resolve device id %s", action.Target.ID)
+		return fmt.Errorf("unable to resolve device id %s.%s", action.Target.Typ, action.Target.ID)
 	}
 
 	step, err := action.IntParam("step")
@@ -42,7 +35,7 @@ func (s *Service) StepBrightness(action *rules.Action) error {
 
 	direction, err := action.StringParam("direction")
 
-	switch *action.Target.Typ {
+	switch action.Target.Typ {
 	case "light":
 		return s.Client.LightStepBrightness(id, math.Abs(float64(step)), direction)
 	default:
@@ -51,24 +44,17 @@ func (s *Service) StepBrightness(action *rules.Action) error {
 }
 
 func (s *Service) Toggle(action *rules.Action) error {
-	if action.Target == nil {
-		return fmt.Errorf("no target found")
-	}
-	if action.Target.Typ == nil {
-		return fmt.Errorf("no target_type found")
-	}
-
 	on, err := action.BooleanParam("on")
 	if err != nil {
 		return err
 	}
 
-	target, ok := s.Client.ResourceRegistry.Resolve(*action.Target.Typ, action.Target.ID)
+	target, ok := s.Client.ResourceRegistry.Resolve(action.Target.Typ, action.Target.ID)
 	if !ok {
 		return fmt.Errorf("unable to resolve target for %s:%s", action.Target.Typ, action.Target.ID)
 	}
 
-	switch *action.Target.Typ {
+	switch action.Target.Typ {
 	case "light":
 		return s.Client.LightToggle(target, !on)
 	default:

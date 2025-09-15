@@ -13,7 +13,7 @@ import (
 	"os"
 )
 
-func NewHaloIntegration(ctx context.Context, baseLogger *zap.Logger) (engine.Integration, error) {
+func NewIntegration(ctx context.Context, baseLogger *zap.Logger) (engine.Integration, error) {
 	logger := engine.IntegrationLogger(baseLogger, "halo")
 	addr := os.Getenv("HALO_ADDR")
 	configFile := os.Getenv("HALO_CONFIG")

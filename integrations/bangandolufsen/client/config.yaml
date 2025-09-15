@@ -1,0 +1,15 @@
+devices:
+  "beosound stage":
+    ip: "192.168.1.145"
+    jid: "4541.1200581.36869189@products.bang-olufsen.com"
+    is_mozart: false
+
+  "beosound a9":
+    ip: "192.168.1.250"
+    jid: "3090.1200634.36640852@products.bang-olufsen.com"
+    is_mozart: true
+
+  "core":
+    ip: "192.168.1.223"
+    jid: "3058.1305800.36956608@products.bang-olufsen.com"
+    is_mozart: true

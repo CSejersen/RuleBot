@@ -4,9 +4,9 @@ import (
 	"context"
 	"go.uber.org/zap"
 	"home_automation_server/engine"
+	"home_automation_server/integrations/bangandolufsen"
 	"home_automation_server/integrations/halo"
 	"home_automation_server/integrations/hue"
-	"home_automation_server/integrations/mozart"
 	"log"
 	"os"
 	"os/signal"
@@ -35,21 +35,21 @@ func setupLogger() *zap.Logger {
 
 func registerIntegrations(ctx context.Context, e *engine.Engine, logger *zap.Logger) {
 	// Hue
-	hueIntegration, err := hue.NewHueIntegration(logger)
+	hueIntegration, err := hue.NewIntegration(logger)
 	if err != nil {
 		logger.Fatal("failed to init Hue integration", zap.Error(err))
 	}
 	e.RegisterIntegration(hueIntegration)
 
 	// Halo
-	haloIntegration, err := halo.NewHaloIntegration(ctx, logger)
+	haloIntegration, err := halo.NewIntegration(ctx, logger)
 	if err != nil {
 		logger.Fatal("failed to init Halo integration", zap.Error(err))
 	}
 	e.RegisterIntegration(haloIntegration)
 
 	// Mozart
-	mozartIntegration, err := mozart.NewMozartIntegration(logger)
+	mozartIntegration, err := bangandolufsen.NewIntegration(logger)
 	if err != nil {
 		logger.Fatal("failed to init Mozart integration", zap.Error(err))
 	}

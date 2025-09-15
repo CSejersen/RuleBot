@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/engine"
 	"home_automation_server/engine/rules"
@@ -20,10 +19,6 @@ func (s *Service) ExportServices() map[string]engine.ServiceHandler {
 }
 
 func (s *Service) UpdateButtonValue(action *rules.Action) error {
-	if action.Target == nil {
-		return fmt.Errorf("no target found")
-	}
-
 	id, err := s.Client.ResolveBtnId(action.Target.ID)
 	if err != nil {
 		s.Logger.Error("Failed to resolve button id", zap.String("id", id), zap.Error(err))

@@ -11,13 +11,13 @@ const (
 
 type Action struct {
 	Service string         `yaml:"service"`
-	Target  *Target        `yaml:"target,omitempty"`
+	Target  Target         `yaml:"target,omitempty"`
 	Params  map[string]any `yaml:"params,omitempty"`
 }
 
 type Target struct {
-	Typ *string `yaml:"type,omitempty"`
-	ID  string  `yaml:"id"`
+	Typ string `yaml:"type,omitempty"`
+	ID  string `yaml:"id"`
 }
 
 type TemplateRef struct {

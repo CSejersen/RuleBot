@@ -9,56 +9,36 @@ import (
 	"net/http"
 )
 
-type MozartDevice struct {
-	IP  string
-	JID string
-}
-
 type Client struct {
-	DeviceRegistry map[string]MozartDevice // humanID --> MozartDevice
-	client         *http.Client
-	Logger         *zap.Logger
+	Config Config
+	client *http.Client
+	Logger *zap.Logger
 }
 
-func New(deviceIPs map[string]string, logger *zap.Logger) (*Client, error) {
+func New(configPath string, logger *zap.Logger) (*Client, error) {
 	c := &Client{
 		client: &http.Client{},
 		Logger: logger,
 	}
 
-	if err := c.initDeviceRegistry(deviceIPs); err != nil {
+	err := c.loadConfig(configPath)
+	if err != nil {
 		return nil, err
 	}
+
 	return c, nil
 }
 
-func (c *Client) initDeviceRegistry(deviceIPs map[string]string) error {
-	c.DeviceRegistry = make(map[string]MozartDevice)
-
-	for name, ip := range deviceIPs {
-		jid, err := c.fetchJID(ip)
-		if err != nil {
-			return err
-		}
-
-		c.DeviceRegistry[name] = MozartDevice{
-			IP:  ip,
-			JID: jid,
-		}
-	}
-	return nil
+func (c *Client) get(ip, path string, v interface{}) error {
+	return c.doRequest(http.MethodGet, ip, path, nil, v)
 }
 
-func (c *Client) get(deviceIP, path string, v interface{}) error {
-	return c.doRequest(http.MethodGet, deviceIP, path, nil, v)
+func (c *Client) post(ip, path string, body, v interface{}) error {
+	return c.doRequest(http.MethodPost, ip, path, body, v)
 }
 
-func (c *Client) post(deviceIP, path string, body, v interface{}) error {
-	return c.doRequest(http.MethodPost, deviceIP, path, body, v)
-}
-
-func (c *Client) put(deviceIP, path string, body, v interface{}) error {
-	return c.doRequest(http.MethodPut, deviceIP, path, body, v)
+func (c *Client) put(ip, path string, body, v interface{}) error {
+	return c.doRequest(http.MethodPut, ip, path, body, v)
 }
 
 func (c *Client) doRequest(method, ip, path string, body interface{}, v interface{}) error {

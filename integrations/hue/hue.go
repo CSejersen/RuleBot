@@ -11,7 +11,7 @@ import (
 	"os"
 )
 
-func NewHueIntegration(baseLogger *zap.Logger) (engine.Integration, error) {
+func NewIntegration(baseLogger *zap.Logger) (engine.Integration, error) {
 	logger := engine.IntegrationLogger(baseLogger, "hue")
 	ip := os.Getenv("HUE_IP")
 	appKey := os.Getenv("HUE_APP_KEY")
