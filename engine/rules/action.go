@@ -21,8 +21,9 @@ type Target struct {
 }
 
 type TemplateRef struct {
-	Source string // "payload", "state" ..
-	Path   string
+	Source  string // "payload", "state" ..
+	Path    string
+	Default any
 }
 
 func (a *Action) FloatParam(key string) (float64, error) {

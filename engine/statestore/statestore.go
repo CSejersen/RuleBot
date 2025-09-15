@@ -2,6 +2,7 @@ package statestore
 
 import (
 	"fmt"
+	"go.uber.org/zap"
 	"home_automation_server/engine/pubsub"
 	"home_automation_server/utils"
 	"strings"
@@ -12,6 +13,7 @@ import (
 type StateStore struct {
 	mu     sync.RWMutex
 	states map[string]*State // key = integration:type:entity
+	logger *zap.Logger
 }
 
 type State struct {
@@ -70,20 +72,25 @@ func (s *StateStore) GetState(source, typ, entity string) (*State, bool) {
 	return state, ok
 }
 
-func (s *StateStore) ResolvePath(path string) any {
+func (s *StateStore) ResolvePath(path string) (any, bool) {
 	split := strings.Split(path, ":")
 	if len(split) != 2 {
-		return nil
+		s.logger.Error("Invalid path, expected 'source.type.entity:field'", zap.String("path", path))
+		return nil, false
 	}
-	value := split[1]
+	field := split[1]
 
-	obj := strings.Split(split[0], ".")
-	source := obj[0]
-	typ := obj[1]
-	entity := obj[2]
+	stateObj := strings.Split(split[0], ".")
+	source := stateObj[0]
+	typ := stateObj[1]
+	entity := stateObj[2]
 
 	if state, ok := s.GetState(source, typ, entity); ok {
-		return state.Fields[utils.NormalizeString(value)]
+		if val, exists := state.Fields[field]; exists {
+			return val, true
+		}
+		return nil, false
 	}
-	return nil
+
+	return nil, false
 }

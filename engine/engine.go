@@ -173,7 +173,6 @@ func (e *Engine) ResolveActionParams(action rules.Action, event pubsub.Event) ma
 		switch val := v.(type) {
 		case string:
 			if ref, ok := parseTemplate(val); ok {
-				e.Logger.Debug("param is templated")
 				// param is templated
 				switch ref.Source {
 				case "payload":
@@ -185,12 +184,13 @@ func (e *Engine) ResolveActionParams(action rules.Action, event pubsub.Event) ma
 						resolved[k] = nil
 					}
 				case "state":
-					value := e.StateStore.ResolvePath(ref.Path)
-					resolved[k] = value
+					if value, ok := e.StateStore.ResolvePath(ref.Path); ok {
+						resolved[k] = value
+					}
+					resolved[k] = ref.Default // if no default is defined this will just be nil
 				}
 			} else {
-				e.Logger.Debug("param is not templated")
-				// params is a non templated string
+				// param is a non templated string
 				resolved[k] = val
 			}
 		default:
@@ -201,11 +201,37 @@ func (e *Engine) ResolveActionParams(action rules.Action, event pubsub.Event) ma
 }
 
 func parseTemplate(val string) (*rules.TemplateRef, bool) {
-	if strings.HasPrefix(val, rules.ParamPrefixPayload) && strings.HasSuffix(val, "}") {
-		return &rules.TemplateRef{Source: "payload", Path: val[len(rules.ParamPrefixPayload) : len(val)-1]}, true
+	val = strings.TrimSpace(val)
+
+	if !strings.HasPrefix(val, "${") || !strings.HasSuffix(val, "}") {
+		return nil, false
 	}
-	if strings.HasPrefix(val, rules.ParamPrefixState) && strings.HasSuffix(val, "}") {
-		return &rules.TemplateRef{Source: "state", Path: val[len(rules.ParamPrefixState) : len(val)-1]}, true
+
+	inner := strings.TrimSuffix(strings.TrimPrefix(val, "${"), "}")
+
+	// optional defaultVal, split on "|"
+	var path string
+	var defaultVal any
+	parts := strings.Split(inner, "|")
+	path = strings.TrimSpace(parts[0])
+	if len(parts) == 2 {
+		defaultVal = strings.TrimSpace(parts[1])
 	}
-	return nil, false
+
+	switch {
+	case strings.HasPrefix(path, "payload."):
+		return &rules.TemplateRef{
+			Source:  "payload",
+			Path:    strings.TrimPrefix(path, "payload."),
+			Default: defaultVal,
+		}, true
+	case strings.HasPrefix(path, "state."):
+		return &rules.TemplateRef{
+			Source:  "state",
+			Path:    strings.TrimPrefix(path, "state."),
+			Default: defaultVal,
+		}, true
+	default:
+		return nil, false
+	}
 }
