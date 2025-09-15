@@ -4,11 +4,6 @@ import (
 	"fmt"
 )
 
-const (
-	ParamPrefixPayload = "${payload."
-	ParamPrefixState   = "${state."
-)
-
 type Action struct {
 	Service string         `yaml:"service"`
 	Target  Target         `yaml:"target,omitempty"`

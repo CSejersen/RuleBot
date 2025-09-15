@@ -1,7 +1,10 @@
 package client
 
 import (
+	"context"
 	"fmt"
+	"github.com/fsnotify/fsnotify"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 	"os"
 )
@@ -30,4 +33,34 @@ func (c *Client) loadConfig(path string) error {
 
 	c.Config = cfg
 	return nil
+}
+
+func (c *Client) WatchConfig(ctx context.Context, path string) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		c.Logger.Error("failed to create fs watcher", zap.Error(err))
+		return
+	}
+	defer watcher.Close()
+
+	if err := watcher.Add(path); err != nil {
+		c.Logger.Error("failed to add rules file to watcher", zap.String("path", path), zap.Error(err))
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case evt := <-watcher.Events:
+			if evt.Op&(fsnotify.Write|fsnotify.Create) > 0 {
+				c.Logger.Info("config file changed, reloading", zap.String("file", evt.Name))
+				if err := c.loadConfig(path); err != nil {
+					c.Logger.Error("failed to reload config", zap.Error(err))
+				}
+			}
+		case err := <-watcher.Errors:
+			c.Logger.Warn("config watcher error", zap.Error(err))
+		}
+	}
 }

@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"go.uber.org/zap"
@@ -15,18 +16,29 @@ type Client struct {
 	Logger *zap.Logger
 }
 
-func New(configPath string, logger *zap.Logger) (*Client, error) {
+func New(ctx context.Context, configPath string, logger *zap.Logger) (*Client, error) {
 	c := &Client{
 		client: &http.Client{},
 		Logger: logger,
 	}
 
-	err := c.loadConfig(configPath)
+	err := c.init(ctx, configPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to init client: %w", err)
 	}
 
 	return c, nil
+}
+
+func (c *Client) init(ctx context.Context, configPath string) error {
+	err := c.loadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config %w", err)
+	}
+
+	c.WatchConfig(ctx, configPath)
+
+	return nil
 }
 
 func (c *Client) get(ip, path string, v interface{}) error {
