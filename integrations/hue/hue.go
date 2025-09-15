@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/engine"
-	"home_automation_server/engine/pubsub"
 	hueclient "home_automation_server/integrations/hue/client"
 	"home_automation_server/integrations/hue/eventsource"
 	"home_automation_server/integrations/hue/service"
@@ -37,16 +36,7 @@ func NewHueIntegration(baseLogger *zap.Logger) (engine.Integration, error) {
 		Name:        "hue",
 		EventSource: source,
 		Translator:  trans,
-		Aggregator:  &PassThroughAggregator{},
+		Aggregator:  &engine.PassThroughAggregator{},
 		Services:    s.ExportServices(),
 	}, nil
-}
-
-type PassThroughAggregator struct{}
-
-func (a *PassThroughAggregator) Aggregate(e pubsub.Event) *pubsub.Event {
-	return &e
-}
-func (a *PassThroughAggregator) Flush() *pubsub.Event {
-	return nil
 }

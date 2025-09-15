@@ -6,6 +6,7 @@ import (
 	"home_automation_server/engine"
 	"home_automation_server/integrations/halo"
 	"home_automation_server/integrations/hue"
+	"home_automation_server/integrations/mozart"
 	"log"
 	"os"
 	"os/signal"
@@ -46,6 +47,13 @@ func registerIntegrations(ctx context.Context, e *engine.Engine, logger *zap.Log
 		logger.Fatal("failed to init Halo integration", zap.Error(err))
 	}
 	e.RegisterIntegration(haloIntegration)
+
+	// Mozart
+	mozartIntegration, err := mozart.NewMozartIntegration(logger)
+	if err != nil {
+		logger.Fatal("failed to init Mozart integration", zap.Error(err))
+	}
+	e.RegisterIntegration(mozartIntegration)
 }
 
 func runEngine(e *engine.Engine, logger *zap.Logger, ctx context.Context) {

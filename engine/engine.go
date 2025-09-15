@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Engine struct {
@@ -28,6 +29,10 @@ type Engine struct {
 	actionQueue chan *rules.Action
 	wg          sync.WaitGroup
 	nWorkers    int
+
+	// Keep track of time-based triggers
+	ruleTimers map[string]*time.Timer // key: rule_alias+trigger hash
+	timersMu   sync.Mutex
 
 	Logger *zap.Logger
 }
@@ -70,10 +75,6 @@ func (e *Engine) Init(ctx context.Context) error {
 	return nil
 }
 
-func (e *Engine) queueAction(a *rules.Action) {
-	e.actionQueue <- a
-}
-
 func (e *Engine) startWorkers() {
 	for i := 0; i < e.nWorkers; i++ {
 		e.wg.Add(1)
@@ -108,7 +109,7 @@ func (e *Engine) RegisterIntegration(i Integration) {
 	e.Integrations[i.Name] = i
 
 	for service, handler := range i.Services {
-		e.Logger.Debug("registering service", zap.String("service", service))
+		e.Logger.Debug("registering service", zap.String("service", service), zap.String("integration", i.Name))
 		e.RegisterService(i.Name, service, handler)
 	}
 }
@@ -163,75 +164,5 @@ func (e *Engine) watchRules(ctx context.Context) {
 		case err := <-watcher.Errors:
 			e.Logger.Warn("rules watcher error", zap.Error(err))
 		}
-	}
-}
-
-func (e *Engine) ResolveActionParams(action rules.Action, event pubsub.Event) map[string]interface{} {
-	e.Logger.Debug("Resolving action params", zap.Any("actionParams", action.Params), zap.Any("eventPayload", event.Payload))
-	resolved := make(map[string]interface{})
-	for k, v := range action.Params {
-		switch val := v.(type) {
-		case string:
-			if ref, ok := parseTemplate(val); ok {
-				// param is templated
-				switch ref.Source {
-				case "payload":
-					e.Logger.Debug("resolving param from Payload")
-					if value, ok := event.Payload[ref.Path]; ok {
-						resolved[k] = value
-					} else {
-						e.Logger.Debug("param not found in payload")
-						resolved[k] = nil
-					}
-				case "state":
-					if value, ok := e.StateStore.ResolvePath(ref.Path); ok {
-						resolved[k] = value
-					}
-					resolved[k] = ref.Default // if no default is defined this will just be nil
-				}
-			} else {
-				// param is a non templated string
-				resolved[k] = val
-			}
-		default:
-			resolved[k] = val
-		}
-	}
-	return resolved
-}
-
-func parseTemplate(val string) (*rules.TemplateRef, bool) {
-	val = strings.TrimSpace(val)
-
-	if !strings.HasPrefix(val, "${") || !strings.HasSuffix(val, "}") {
-		return nil, false
-	}
-
-	inner := strings.TrimSuffix(strings.TrimPrefix(val, "${"), "}")
-
-	// optional defaultVal, split on "|"
-	var path string
-	var defaultVal any
-	parts := strings.Split(inner, "|")
-	path = strings.TrimSpace(parts[0])
-	if len(parts) == 2 {
-		defaultVal = strings.TrimSpace(parts[1])
-	}
-
-	switch {
-	case strings.HasPrefix(path, "payload."):
-		return &rules.TemplateRef{
-			Source:  "payload",
-			Path:    strings.TrimPrefix(path, "payload."),
-			Default: defaultVal,
-		}, true
-	case strings.HasPrefix(path, "state."):
-		return &rules.TemplateRef{
-			Source:  "state",
-			Path:    strings.TrimPrefix(path, "state."),
-			Default: defaultVal,
-		}, true
-	default:
-		return nil, false
 	}
 }

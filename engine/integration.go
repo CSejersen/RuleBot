@@ -33,3 +33,22 @@ type Integration struct {
 func IntegrationLogger(base *zap.Logger, name string) *zap.Logger {
 	return base.Named(name).With(zap.String("integration", name))
 }
+
+type NoopSource struct{}
+type NoopTranslator struct{}
+type PassThroughAggregator struct{}
+
+func (s *NoopSource) Run(ctx context.Context, out chan<- []byte) error {
+	return nil
+}
+
+func (s *NoopTranslator) Translate(raw []byte) ([]pubsub.Event, error) {
+	return []pubsub.Event{}, nil
+}
+
+func (a *PassThroughAggregator) Aggregate(e pubsub.Event) *pubsub.Event {
+	return &e
+}
+func (a *PassThroughAggregator) Flush() *pubsub.Event {
+	return nil
+}

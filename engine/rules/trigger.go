@@ -7,9 +7,9 @@ import (
 )
 
 type Trigger struct {
-	Event       string  `yaml:"event"`
-	Entity      *string `yaml:"entity_name,omitempty"`
-	StateChange string  `yaml:"state_change"`
+	Event       string `yaml:"event"`
+	Entity      string `yaml:"entity_name,omitempty"`
+	StateChange string `yaml:"state_change"`
 }
 
 func (t *Trigger) Matches(event pubsub.Event) bool {
@@ -26,7 +26,7 @@ func (t *Trigger) Matches(event pubsub.Event) bool {
 	if utils.NormalizeString(event.Type) != utils.NormalizeString(triggerType) {
 		return false
 	}
-	if t.Entity != nil && utils.NormalizeString(event.Entity) != utils.NormalizeString(*t.Entity) {
+	if utils.NormalizeString(event.Entity) != utils.NormalizeString(t.Entity) {
 		return false
 	}
 	if utils.NormalizeString(event.StateChange) != utils.NormalizeString(t.StateChange) {

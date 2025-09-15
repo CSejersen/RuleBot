@@ -11,8 +11,6 @@ import (
 	"net/http"
 )
 
-type HueType string
-
 type Client struct {
 	IP               string
 	AppKey           string
