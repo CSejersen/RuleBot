@@ -4,6 +4,10 @@ rules:
       event: "halo.wheel"
       entity_name: "Flower Pot"
       state_change: "clockwise"
+    condition:
+      entity: "hue.light.flowerpot"
+      field: "on"
+      equals: false
     action:
       - service: "hue.step_brightness"
         target:
@@ -27,18 +31,18 @@ rules:
           direction: "down"
           step: "${payload.step}"
 
-  - alias: "Halo: Toggle Flower Pot Light"
+  - alias: "Toggle Living Room Light"
     trigger:
-      event: "halo.button"
-      entity_name: "Flower Pot"
+      event: "remote.button"
+      entity_name: "light_btn"
       state_change: "pressed"
     action:
       - service: "hue.toggle"
         target:
           type: "light"
-          id: "Flower Pot"
+          id: "living_room"
         params:
-          on: "${state.hue.light.flower_pot:on}"
+          current_on_state: "${state.hue.light.living_room:on}"
 
   - alias: "Halo: Update flower_pot button"
     trigger:

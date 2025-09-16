@@ -48,12 +48,12 @@ func registerIntegrations(ctx context.Context, e *engine.Engine, logger *zap.Log
 	}
 	e.RegisterIntegration(haloIntegration)
 
-	// Mozart
-	mozartIntegration, err := bangandolufsen.NewIntegration(logger)
+	// Bang and Olufsen
+	bangOlufsenIntegration, err := bangandolufsen.NewIntegration(logger)
 	if err != nil {
 		logger.Fatal("failed to init Mozart integration", zap.Error(err))
 	}
-	e.RegisterIntegration(mozartIntegration)
+	e.RegisterIntegration(bangOlufsenIntegration)
 }
 
 func runEngine(e *engine.Engine, logger *zap.Logger, ctx context.Context) {
