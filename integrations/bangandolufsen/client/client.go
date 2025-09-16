@@ -36,7 +36,9 @@ func (c *Client) init(ctx context.Context, configPath string) error {
 		return fmt.Errorf("failed to load config %w", err)
 	}
 
-	c.WatchConfig(ctx, configPath)
+	go func() {
+		c.WatchConfig(ctx, configPath)
+	}()
 
 	return nil
 }

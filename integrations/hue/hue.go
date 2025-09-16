@@ -18,13 +18,13 @@ func NewIntegration(baseLogger *zap.Logger) (engine.Integration, error) {
 
 	client, err := hueclient.New(ip, appKey, logger.Named("client"))
 	if err != nil {
-		return engine.Integration{}, fmt.Errorf("falied to construct hue integration: %w", err)
+		return engine.Integration{}, fmt.Errorf("falied to construct hue client: %w", err)
 	}
 
 	source := eventsource.New(ip, appKey, logger.Named("event_source"))
 	trans, err := translator.New(client, logger.Named("translator"))
 	if err != nil {
-		return engine.Integration{}, fmt.Errorf("failed to construct hue integration: %w", err)
+		return engine.Integration{}, fmt.Errorf("failed to construct hue translator: %w", err)
 	}
 
 	s := service.Service{

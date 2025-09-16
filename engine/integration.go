@@ -39,7 +39,8 @@ type NoopTranslator struct{}
 type PassThroughAggregator struct{}
 
 func (s *NoopSource) Run(ctx context.Context, out chan<- []byte) error {
-	return nil
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func (s *NoopTranslator) Translate(raw []byte) ([]pubsub.Event, error) {

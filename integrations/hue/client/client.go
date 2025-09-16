@@ -14,7 +14,7 @@ import (
 type Client struct {
 	IP               string
 	AppKey           string
-	ResourceRegistry ResourceRegistry // human-readableID -> hueID
+	ResourceRegistry ResourceRegistry
 	client           *http.Client
 	Logger           *zap.Logger
 }
@@ -27,7 +27,7 @@ func New(ip string, appKey string, logger *zap.Logger) (*Client, error) {
 		Logger: logger,
 	}
 
-	if err := c.InitResourceRegistry(); err != nil {
+	if err := c.BuildResourceRegistry(); err != nil {
 		return nil, err
 	}
 

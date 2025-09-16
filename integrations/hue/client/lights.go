@@ -11,19 +11,10 @@ type LightsGetResponse struct {
 	Data   []types.LightGet `json:"data"`
 }
 
-func (c *Client) Lights() ([]types.LightGet, error) {
-	var resp LightsGetResponse
-	err := c.get("resource/light", &resp)
-	if err != nil {
-		return nil, err
-	}
-	return resp.Data, nil
-}
-
 func (c *Client) LightStepBrightness(id string, delta float64, action string) error {
 	path := fmt.Sprintf("resource/light/%s", id)
 	req := types.LightPut{
-		DimmingDelta: &types.LightDimmingDeltaPut{Action: action, BrightnessDelta: delta},
+		DimmingDelta: &types.DimmingDeltaPut{Action: action, BrightnessDelta: delta},
 	}
 
 	resp := types.PutResponse{}
@@ -38,7 +29,7 @@ func (c *Client) LightStepBrightness(id string, delta float64, action string) er
 func (c *Client) LightToggle(id string, on bool) error {
 	path := fmt.Sprintf("resource/light/%s", id)
 	req := types.LightPut{
-		On: &types.LightOnPut{
+		On: &types.OnPut{
 			On: on,
 		},
 	}

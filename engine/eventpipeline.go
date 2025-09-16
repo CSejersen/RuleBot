@@ -35,6 +35,8 @@ func (p *EventPipeline) run(ctx context.Context) error {
 		}
 	}()
 
+	p.Logger.Debug("event pipeline started")
+
 	// periodic flush for aggregators
 	ticker := time.NewTicker(300 * time.Millisecond)
 	defer ticker.Stop()

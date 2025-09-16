@@ -22,7 +22,7 @@ func (s *Service) ExportServices() map[string]engine.ServiceHandler {
 }
 
 func (s *Service) StepBrightness(action *rules.Action) error {
-	id, ok := s.Client.ResourceRegistry.Resolve(action.Target.Typ, action.Target.ID)
+	id, ok := s.Client.ResourceRegistry.ResolveName(action.Target.Typ, action.Target.ID)
 	if !ok {
 		return fmt.Errorf("unable to resolve device id %s.%s", action.Target.Typ, action.Target.ID)
 	}
@@ -49,7 +49,7 @@ func (s *Service) Toggle(action *rules.Action) error {
 		return err
 	}
 
-	target, ok := s.Client.ResourceRegistry.Resolve(action.Target.Typ, action.Target.ID)
+	target, ok := s.Client.ResourceRegistry.ResolveName(action.Target.Typ, action.Target.ID)
 	if !ok {
 		return fmt.Errorf("unable to resolve target for %s:%s", action.Target.Typ, action.Target.ID)
 	}

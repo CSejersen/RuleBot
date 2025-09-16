@@ -13,3 +13,11 @@ type RoomMetadataGet struct {
 	Name      string `json:"name"`      // human-readable name
 	Archetype string `json:"archetype"` // e.g., living_room, kitchen, bedroom, etc.
 }
+
+func (r *RoomGet) GetType() string {
+	return r.Type
+}
+
+func (r *RoomGet) GetID() string {
+	return r.ID
+}

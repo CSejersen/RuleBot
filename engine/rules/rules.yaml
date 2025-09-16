@@ -4,10 +4,6 @@ rules:
       event: "halo.wheel"
       entity_name: "Flower Pot"
       state_change: "clockwise"
-    condition:
-      entity: "hue.light.flowerpot"
-      field: "on"
-      equals: false
     action:
       - service: "hue.step_brightness"
         target:
@@ -89,10 +85,6 @@ rules:
     trigger:
       event: "halo.system"
       state_change: "active"
-    condition:
-      - entity: "hue.light.flower_pot"
-        field: "on"
-        in: true
     action:
       - service: "halo.update_button_value"
         target:

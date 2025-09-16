@@ -1,6 +1,7 @@
 package bangandolufsen
 
 import (
+	"context"
 	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/engine"
@@ -9,10 +10,10 @@ import (
 	"os"
 )
 
-func NewIntegration(baseLogger *zap.Logger) (engine.Integration, error) {
+func NewIntegration(ctx context.Context, baseLogger *zap.Logger) (engine.Integration, error) {
 	logger := engine.IntegrationLogger(baseLogger, "bang_and_olufsen")
 	configPath := os.Getenv("BO_CONFIG")
-	apiClient, err := client.New(configPath, logger.Named("client"))
+	apiClient, err := client.New(ctx, configPath, logger.Named("client"))
 	if err != nil {
 		return engine.Integration{}, fmt.Errorf("falied to construct bang and olufsen integration: %w", err)
 	}

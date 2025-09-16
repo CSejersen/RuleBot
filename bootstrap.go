@@ -5,7 +5,6 @@ import (
 	"go.uber.org/zap"
 	"home_automation_server/engine"
 	"home_automation_server/integrations/bangandolufsen"
-	"home_automation_server/integrations/halo"
 	"home_automation_server/integrations/hue"
 	"log"
 	"os"
@@ -42,14 +41,14 @@ func registerIntegrations(ctx context.Context, e *engine.Engine, logger *zap.Log
 	e.RegisterIntegration(hueIntegration)
 
 	// Halo
-	haloIntegration, err := halo.NewIntegration(ctx, logger)
-	if err != nil {
-		logger.Fatal("failed to init Halo integration", zap.Error(err))
-	}
-	e.RegisterIntegration(haloIntegration)
+	//haloIntegration, err := halo.NewIntegration(ctx, logger)
+	//if err != nil {
+	//	logger.Fatal("failed to init Halo integration", zap.Error(err))
+	//}
+	//e.RegisterIntegration(haloIntegration)
 
 	// Bang and Olufsen
-	bangOlufsenIntegration, err := bangandolufsen.NewIntegration(logger)
+	bangOlufsenIntegration, err := bangandolufsen.NewIntegration(ctx, logger)
 	if err != nil {
 		logger.Fatal("failed to init Mozart integration", zap.Error(err))
 	}
