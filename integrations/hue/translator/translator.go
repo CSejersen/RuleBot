@@ -66,12 +66,16 @@ func (t *Translator) Translate(raw []byte) ([]pubsub.Event, error) {
 			}
 			translatedEvents = append(translatedEvents, psEvents...)
 
-		case "scene":
+		case "scene", "smart_scene":
+			t.Logger.Debug("translating scene event")
 			psEvent, err := t.translateSceneUpdate(e, eventBatch.TimeStamp)
 			if err != nil {
 				continue
 			}
 			translatedEvents = append(translatedEvents, psEvent)
+
+		default:
+			t.Logger.Debug("unknown event", zap.String("type", e.GetType()))
 		}
 
 	}
@@ -81,12 +85,14 @@ func (t *Translator) Translate(raw []byte) ([]pubsub.Event, error) {
 func (t *Translator) translateSceneUpdate(e events.Event, ts time.Time) (pubsub.Event, error) {
 	sceneUpdate, ok := e.(*events.SceneUpdate)
 	if !ok {
+		t.Logger.Error("failed to type assert on sceneUpdate", zap.Any("event", e))
 		return pubsub.Event{}, fmt.Errorf("expected a *SceneUpdate for event type 'scene'")
 	}
 
-	action := sceneUpdate.SafeAction()
-	if action == nil {
-		return pubsub.Event{}, fmt.Errorf("no recall_action for scene update")
+	active := sceneUpdate.SafeActive()
+	if active == nil {
+		t.Logger.Error("no status.active for scene update", zap.Any("scene_update", sceneUpdate))
+		return pubsub.Event{}, fmt.Errorf("no status.active for scene update")
 	}
 
 	humanID, ok := t.Client.ResourceRegistry.ResolveName(sceneUpdate.Type, sceneUpdate.ID)
@@ -94,14 +100,19 @@ func (t *Translator) translateSceneUpdate(e events.Event, ts time.Time) (pubsub.
 		t.Logger.Error("failed to lookup name", zap.String("type", sceneUpdate.Type), zap.String("id", sceneUpdate.ID))
 	}
 
+	group, ok := t.Client.ResourceRegistry.ResolveGroupForScene(sceneUpdate.ID)
+	if !ok {
+		t.Logger.Error("failed to lookup group", zap.String("type", sceneUpdate.Type), zap.String("id", sceneUpdate.ID))
+	}
+
 	return pubsub.Event{
 		Source:      "hue",
 		Type:        "scene",
 		Entity:      humanID,
-		StateChange: "recall_action",
+		StateChange: "active_status",
 		Payload: map[string]any{
-			"action": action,
-			"group":  t.Client.ResourceRegistry.ResolveGroupForScene(sceneUpdate.ID),
+			"active": active,
+			"group":  group,
 		},
 		Time: ts,
 	}, nil

@@ -13,7 +13,7 @@ import (
 type StateStore struct {
 	mu     sync.RWMutex
 	states map[string]*State // key = integration:type:entity
-	logger *zap.Logger
+	Logger *zap.Logger
 }
 
 type State struct {
@@ -24,9 +24,10 @@ type State struct {
 	LastSeen    time.Time
 }
 
-func NewStateStore() *StateStore {
+func NewStateStore(logger *zap.Logger) *StateStore {
 	return &StateStore{
 		states: make(map[string]*State),
+		Logger: logger,
 	}
 }
 
@@ -39,29 +40,6 @@ func makeKey(source, typ, entity string) string {
 func (s *StateStore) ApplyEvent(e pubsub.Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	if e.Source == "hue" && e.Type == "scene" {
-		err := s.updateActiveScene(e)
-		if err != nil {
-			return fmt.Errorf("failed to update active scene in statestore: %s", err)
-		}
-		// Don't store the actual scene objects, we only care about the active scene of grouped_lights
-		return nil
-	}
-
-	// Set active scene to nil if a grouped is turned off
-	if e.Source == "hue" && e.Type == "grouped_light" && e.StateChange == "power_mode" {
-		on, err := e.BooleanPayload("on")
-		if err != nil {
-			return err
-		}
-		if !on {
-			key := makeKey(e.Source, e.Type, e.Entity)
-			if state, ok := s.states[key]; ok {
-				delete(state.Fields, "active_scene")
-			}
-		}
-	}
 
 	// Apply the event to the stateStore
 	key := makeKey(e.Source, e.Type, e.Entity)
@@ -88,33 +66,6 @@ func (s *StateStore) ApplyEvent(e pubsub.Event) error {
 	return nil
 }
 
-func (s *StateStore) updateActiveScene(e pubsub.Event) error {
-	sceneName := e.Entity
-	groupName, err := e.StringPayload("group")
-	if err != nil {
-		return fmt.Errorf("failed to get payload.group: %w", err)
-	}
-
-	// Track active scene at grouped_light level
-	key := makeKey(e.Source, "grouped_light", groupName)
-	state, ok := s.states[key]
-	if !ok {
-		state = &State{
-			Integration: utils.NormalizeString(e.Source),
-			Type:        "grouped_light",
-			Entity:      groupName,
-			Fields:      make(map[string]interface{}),
-			LastSeen:    time.Now(),
-		}
-		s.states[key] = state
-	}
-
-	state.Fields["active_scene"] = sceneName
-	state.LastSeen = e.Time
-
-	return nil
-}
-
 // GetState returns a state snapshot for an entity
 func (s *StateStore) GetState(source, typ, entity string) (*State, bool) {
 	key := makeKey(source, typ, entity)
@@ -127,14 +78,14 @@ func (s *StateStore) GetState(source, typ, entity string) (*State, bool) {
 func (s *StateStore) ResolvePath(path string) (any, bool) {
 	split := strings.Split(path, ":")
 	if len(split) != 2 {
-		s.logger.Error("Invalid path, expected 'source.type.entity:field'", zap.String("path", path))
+		s.Logger.Error("Invalid path, expected 'source.type.entity:field'", zap.String("path", path))
 		return nil, false
 	}
 	field := split[1]
 
 	stateObj := strings.Split(split[0], ".")
 	if len(stateObj) != 3 {
-		s.logger.Error("Invalid path, expected 'source.type.entity:field'", zap.String("path", path))
+		s.Logger.Error("Invalid path, expected 'source.type.entity:field'", zap.String("path", path))
 		return nil, false
 	}
 	source := stateObj[0]

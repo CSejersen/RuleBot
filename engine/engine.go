@@ -44,7 +44,7 @@ func New(ctx context.Context, logger *zap.Logger, nWorkers int) (*Engine, error)
 		RuleSet:         rules.RuleSet{},
 		Integrations:    make(map[string]Integration),
 		ServiceRegistry: newServiceRegistry(),
-		StateStore:      statestore.NewStateStore(),
+		StateStore:      statestore.NewStateStore(logger),
 
 		PS:           ps,
 		EventChannel: ps.Subscribe(),

@@ -65,10 +65,9 @@ func (p *EventParser) parse(b []byte) (EventBatch, error) {
 				p.Logger.Warn("Failed to read event type", zap.Error(err))
 				continue
 			}
-
 			constructor, ok := p.EventRegistry[typeWrapper.Type]
 			if !ok {
-				//p.Logger.Info("Unsupported event type, skipping", zap.String("type", typeWrapper.Typ))
+				p.Logger.Info("Unsupported event type, skipping", zap.String("type", typeWrapper.Type))
 				continue
 			}
 
