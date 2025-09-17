@@ -36,12 +36,35 @@ func makeKey(source, typ, entity string) string {
 }
 
 // ApplyEvent updates state based on an incoming event
-func (s *StateStore) ApplyEvent(e pubsub.Event) {
+func (s *StateStore) ApplyEvent(e pubsub.Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	key := makeKey(e.Source, e.Type, e.Entity)
+	if e.Source == "hue" && e.Type == "scene" {
+		err := s.updateActiveScene(e)
+		if err != nil {
+			return fmt.Errorf("failed to update active scene in statestore: %s", err)
+		}
+		// Don't store the actual scene objects, we only care about the active scene of grouped_lights
+		return nil
+	}
 
+	// Set active scene to nil if a grouped is turned off
+	if e.Source == "hue" && e.Type == "grouped_light" && e.StateChange == "power_mode" {
+		on, err := e.BooleanPayload("on")
+		if err != nil {
+			return err
+		}
+		if !on {
+			key := makeKey(e.Source, e.Type, e.Entity)
+			if state, ok := s.states[key]; ok {
+				delete(state.Fields, "active_scene")
+			}
+		}
+	}
+
+	// Apply the event to the stateStore
+	key := makeKey(e.Source, e.Type, e.Entity)
 	state, ok := s.states[key]
 	if !ok {
 		state = &State{
@@ -61,6 +84,35 @@ func (s *StateStore) ApplyEvent(e pubsub.Event) {
 	}
 	state.Fields["last_state_change"] = e.StateChange
 	state.LastSeen = e.Time
+
+	return nil
+}
+
+func (s *StateStore) updateActiveScene(e pubsub.Event) error {
+	sceneName := e.Entity
+	groupName, err := e.StringPayload("group")
+	if err != nil {
+		return fmt.Errorf("failed to get payload.group: %w", err)
+	}
+
+	// Track active scene at grouped_light level
+	key := makeKey(e.Source, "grouped_light", groupName)
+	state, ok := s.states[key]
+	if !ok {
+		state = &State{
+			Integration: utils.NormalizeString(e.Source),
+			Type:        "grouped_light",
+			Entity:      groupName,
+			Fields:      make(map[string]interface{}),
+			LastSeen:    time.Now(),
+		}
+		s.states[key] = state
+	}
+
+	state.Fields["active_scene"] = sceneName
+	state.LastSeen = e.Time
+
+	return nil
 }
 
 // GetState returns a state snapshot for an entity
@@ -81,6 +133,10 @@ func (s *StateStore) ResolvePath(path string) (any, bool) {
 	field := split[1]
 
 	stateObj := strings.Split(split[0], ".")
+	if len(stateObj) != 3 {
+		s.logger.Error("Invalid path, expected 'source.type.entity:field'", zap.String("path", path))
+		return nil, false
+	}
 	source := stateObj[0]
 	typ := stateObj[1]
 	entity := stateObj[2]
