@@ -63,18 +63,18 @@ rules:
         params:
           scene: "movie"
 
-  - alias: "Halo: Play Record"
+  - alias: "Play Record"
     trigger:
       event: "halo.button"
       entity_name: "Play Record"
       state_change: "pressed"
     action:
       - service: "bangandolufsen.set_playback_source"
-        blocking: true
         target:
           id: "beoconnect_core"
         params:
           source: "lineIn"
+        blocking: true
       - service: "bangandolufsen.expand_experience"
         target:
           id: "beoconnect_core"

@@ -26,9 +26,9 @@ type Engine struct {
 	EventChannel <-chan pubsub.Event
 
 	// Execute actions
-	actionQueue chan *rules.Action
-	wg          sync.WaitGroup
-	nWorkers    int
+	ruleTaskQueue chan *RuleTask
+	wg            sync.WaitGroup
+	nWorkers      int
 
 	// Keep track of time-based triggers
 	ruleTimers map[string]*time.Timer // key: rule_alias+trigger hash
@@ -49,8 +49,8 @@ func New(ctx context.Context, logger *zap.Logger, nWorkers int) (*Engine, error)
 		PS:           ps,
 		EventChannel: ps.Subscribe(),
 
-		actionQueue: make(chan *rules.Action),
-		nWorkers:    nWorkers,
+		ruleTaskQueue: make(chan *RuleTask),
+		nWorkers:      nWorkers,
 
 		Logger: logger.Named("engine"),
 	}
@@ -80,10 +80,8 @@ func (e *Engine) startWorkers() {
 		e.wg.Add(1)
 		go func(id int) {
 			defer e.wg.Done()
-			for action := range e.actionQueue {
-				if err := e.executeAction(action); err != nil {
-					e.Logger.Error("Failed to execute action", zap.Int("worker", id), zap.String("service", action.Service), zap.Error(err))
-				}
+			for task := range e.ruleTaskQueue {
+				e.executeRuleTask(task, id)
 			}
 		}(i)
 	}
@@ -165,4 +163,9 @@ func (e *Engine) watchRules(ctx context.Context) {
 			e.Logger.Warn("rules watcher error", zap.Error(err))
 		}
 	}
+}
+
+func (e *Engine) Shutdown() {
+	close(e.ruleTaskQueue)
+	e.wg.Wait()
 }

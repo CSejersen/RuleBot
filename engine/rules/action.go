@@ -2,12 +2,14 @@ package rules
 
 import (
 	"fmt"
+	"strings"
 )
 
 type Action struct {
-	Service string         `yaml:"service"`
-	Target  Target         `yaml:"target,omitempty"`
-	Params  map[string]any `yaml:"params,omitempty"`
+	Service  string         `yaml:"service"`
+	Target   Target         `yaml:"target,omitempty"`
+	Params   map[string]any `yaml:"params,omitempty"`
+	Blocking bool           `yaml:"blocking,omitempty"`
 }
 
 type Target struct {
@@ -19,6 +21,42 @@ type TemplateRef struct {
 	Source  string // "payload", "state" ..
 	Path    string
 	Default any
+}
+
+func ParseTemplateParam(val string) (*TemplateRef, bool) {
+	val = strings.TrimSpace(val)
+
+	if !strings.HasPrefix(val, "${") || !strings.HasSuffix(val, "}") {
+		return nil, false
+	}
+
+	inner := strings.TrimSuffix(strings.TrimPrefix(val, "${"), "}")
+
+	// optional defaultVal, split on "|"
+	var path string
+	var defaultVal any
+	parts := strings.Split(inner, "|")
+	path = strings.TrimSpace(parts[0])
+	if len(parts) == 2 {
+		defaultVal = strings.TrimSpace(parts[1])
+	}
+
+	switch {
+	case strings.HasPrefix(path, "payload."):
+		return &TemplateRef{
+			Source:  "payload",
+			Path:    strings.TrimPrefix(path, "payload."),
+			Default: defaultVal,
+		}, true
+	case strings.HasPrefix(path, "state."):
+		return &TemplateRef{
+			Source:  "state",
+			Path:    strings.TrimPrefix(path, "state."),
+			Default: defaultVal,
+		}, true
+	default:
+		return nil, false
+	}
 }
 
 func (a *Action) FloatParam(key string) (float64, error) {

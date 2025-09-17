@@ -5,8 +5,12 @@ import (
 	"go.uber.org/zap"
 	"home_automation_server/engine/pubsub"
 	"home_automation_server/engine/rules"
-	"strings"
 )
+
+type RuleTask struct {
+	Actions []*rules.Action
+	Event   *pubsub.Event
+}
 
 func (e *Engine) ProcessEvents(ctx context.Context) {
 	go func() {
@@ -25,7 +29,9 @@ func (e *Engine) ProcessEvents(ctx context.Context) {
 }
 
 func (e *Engine) processEvent(event pubsub.Event) error {
+	// Update cached state
 	e.StateStore.ApplyEvent(event)
+
 	for _, rule := range e.RuleSet.Rules {
 		if !rule.Trigger.Matches(event) {
 			continue
@@ -35,23 +41,48 @@ func (e *Engine) processEvent(event pubsub.Event) error {
 			continue
 		}
 
-		e.queueActionsForRule(&rule, &event)
+		e.queueRuleTask(&rule, &event)
 	}
 	return nil
 }
 
-func (e *Engine) queueActionsForRule(rule *rules.Rule, event *pubsub.Event) {
-	for i, action := range rule.Action {
-		e.Logger.Info("queuing action", zap.String("rule_alias", rule.Alias), zap.Int("rule_num", i))
-		resolved := e.ResolveActionParams(&action, event)
+func (e *Engine) executeRuleTask(task *RuleTask, workerID int) {
+	for _, action := range task.Actions {
+		resolved := e.ResolveActionParams(action, task.Event)
 		action.Params = resolved
-		e.actionQueue <- &action
+
+		if action.Blocking {
+			// Wait for completion
+			if err := e.executeAction(action); err != nil {
+				e.Logger.Error("Failed blocking action", zap.String("service", action.Service), zap.Error(err))
+				break // stop further actions in this rule
+			}
+		} else {
+			// fire-and-forget
+			go func(act *rules.Action) {
+				if err := e.executeAction(act); err != nil {
+					e.Logger.Error("Failed non-blocking action", zap.String("service", act.Service), zap.Error(err))
+				}
+			}(action)
+		}
 	}
 }
 
-func (e *Engine) Shutdown() {
-	close(e.actionQueue)
-	e.wg.Wait()
+func (e *Engine) queueRuleTask(rule *rules.Rule, event *pubsub.Event) {
+	e.Logger.Info("queueing rule task", zap.String("rule", rule.Alias))
+
+	task := &RuleTask{
+		Event:   event,
+		Actions: make([]*rules.Action, len(rule.Action)),
+	}
+
+	for i, action := range rule.Action {
+		resolved := e.ResolveActionParams(&action, event)
+		action.Params = resolved
+		task.Actions[i] = &action
+	}
+
+	e.ruleTaskQueue <- task
 }
 
 func (e *Engine) ResolveActionParams(action *rules.Action, event *pubsub.Event) map[string]interface{} {
@@ -60,11 +91,10 @@ func (e *Engine) ResolveActionParams(action *rules.Action, event *pubsub.Event) 
 	for k, v := range action.Params {
 		switch val := v.(type) {
 		case string:
-			if ref, ok := parseTemplate(val); ok {
+			if ref, ok := rules.ParseTemplateParam(val); ok {
 				// param is templated
 				switch ref.Source {
 				case "payload":
-					e.Logger.Debug("resolving param from Payload")
 					if value, ok := event.Payload[ref.Path]; ok {
 						resolved[k] = value
 					} else {
@@ -86,40 +116,4 @@ func (e *Engine) ResolveActionParams(action *rules.Action, event *pubsub.Event) 
 		}
 	}
 	return resolved
-}
-
-func parseTemplate(val string) (*rules.TemplateRef, bool) {
-	val = strings.TrimSpace(val)
-
-	if !strings.HasPrefix(val, "${") || !strings.HasSuffix(val, "}") {
-		return nil, false
-	}
-
-	inner := strings.TrimSuffix(strings.TrimPrefix(val, "${"), "}")
-
-	// optional defaultVal, split on "|"
-	var path string
-	var defaultVal any
-	parts := strings.Split(inner, "|")
-	path = strings.TrimSpace(parts[0])
-	if len(parts) == 2 {
-		defaultVal = strings.TrimSpace(parts[1])
-	}
-
-	switch {
-	case strings.HasPrefix(path, "payload."):
-		return &rules.TemplateRef{
-			Source:  "payload",
-			Path:    strings.TrimPrefix(path, "payload."),
-			Default: defaultVal,
-		}, true
-	case strings.HasPrefix(path, "state."):
-		return &rules.TemplateRef{
-			Source:  "state",
-			Path:    strings.TrimPrefix(path, "state."),
-			Default: defaultVal,
-		}, true
-	default:
-		return nil, false
-	}
 }

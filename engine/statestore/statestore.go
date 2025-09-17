@@ -37,7 +37,7 @@ func makeKey(source, typ, entity string) string {
 }
 
 // ApplyEvent updates state based on an incoming event
-func (s *StateStore) ApplyEvent(e pubsub.Event) error {
+func (s *StateStore) ApplyEvent(e pubsub.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -62,8 +62,6 @@ func (s *StateStore) ApplyEvent(e pubsub.Event) error {
 	}
 	state.Fields["last_state_change"] = e.StateChange
 	state.LastSeen = e.Time
-
-	return nil
 }
 
 // GetState returns a state snapshot for an entity

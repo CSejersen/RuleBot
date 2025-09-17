@@ -66,7 +66,7 @@ func (t *Translator) Translate(raw []byte) ([]pubsub.Event, error) {
 			}
 			translatedEvents = append(translatedEvents, psEvents...)
 
-		case "scene", "smart_scene":
+		case "scene":
 			t.Logger.Debug("translating scene event")
 			psEvent, err := t.translateSceneUpdate(e, eventBatch.TimeStamp)
 			if err != nil {
