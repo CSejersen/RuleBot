@@ -46,28 +46,65 @@ func (t *Translator) Translate(raw []byte) ([]pubsub.Event, error) {
 	}
 
 	// TODO: if switch cases grow beyond what is reasonable we could implement a map of event type to translator-func
-	psEvents := []pubsub.Event{}
+	translatedEvents := []pubsub.Event{}
 	for _, e := range eventBatch.Events {
 		switch e.GetType() {
 		case "light":
 			// a light event might contain multiple changes, a separate event is emitted for each change.
-			psEvent, err := t.translateLightUpdate(e, eventBatch.TimeStamp)
+			psEvents, err := t.translateLightUpdate(e, eventBatch.TimeStamp)
 			if err != nil {
 				t.Logger.Error("failed to translate light update", zap.Error(err))
 				continue
 			}
-			psEvents = append(psEvents, psEvent...)
+			translatedEvents = append(translatedEvents, psEvents...)
 
 		case "grouped_light":
 			// a grouped_light event might contain multiple changes, a separate event is emitted for each change.
-			psEvent, err := t.translateGroupedLightUpdate(e, eventBatch.TimeStamp)
+			psEvents, err := t.translateGroupedLightUpdate(e, eventBatch.TimeStamp)
 			if err != nil {
 				continue
 			}
-			psEvents = append(psEvents, psEvent...)
+			translatedEvents = append(translatedEvents, psEvents...)
+
+		case "scene":
+			psEvent, err := t.translateSceneUpdate(e, eventBatch.TimeStamp)
+			if err != nil {
+				continue
+			}
+			translatedEvents = append(translatedEvents, psEvent)
 		}
+
 	}
-	return psEvents, nil
+	return translatedEvents, nil
+}
+
+func (t *Translator) translateSceneUpdate(e events.Event, ts time.Time) (pubsub.Event, error) {
+	sceneUpdate, ok := e.(*events.SceneUpdate)
+	if !ok {
+		return pubsub.Event{}, fmt.Errorf("expected a *SceneUpdate for event type 'scene'")
+	}
+
+	action := sceneUpdate.SafeAction()
+	if action == nil {
+		return pubsub.Event{}, fmt.Errorf("no recall_action for scene update")
+	}
+
+	humanID, ok := t.Client.ResourceRegistry.ResolveName(sceneUpdate.Type, sceneUpdate.ID)
+	if !ok {
+		t.Logger.Error("failed to lookup name", zap.String("type", sceneUpdate.Type), zap.String("id", sceneUpdate.ID))
+	}
+
+	return pubsub.Event{
+		Source:      "hue",
+		Type:        "scene",
+		Entity:      humanID,
+		StateChange: "recall_action",
+		Payload: map[string]any{
+			"action": action,
+			"group":  t.Client.ResourceRegistry.ResolveGroupForScene(sceneUpdate.ID),
+		},
+		Time: ts,
+	}, nil
 }
 
 func (t *Translator) translateLightUpdate(e events.Event, ts time.Time) ([]pubsub.Event, error) {

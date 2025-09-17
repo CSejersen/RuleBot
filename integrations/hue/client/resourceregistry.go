@@ -41,6 +41,20 @@ func (r *ResourceRegistry) ResolveName(typ, id string) (string, bool) {
 	}
 }
 
+func (r *ResourceRegistry) ResolveGroupForScene(id string) (string, bool) {
+	resource, ok := r.ByTypeAndID["scene"][id]
+	if !ok || resource == nil {
+		return "", false
+	}
+
+	scene, ok := resource.(*types.SceneGet)
+	if !ok {
+		return "", false
+	}
+
+	return r.ResolveName(scene.Group.RType, scene.Group.RID)
+}
+
 // BuildResourceRegistry build the Resource Registry
 func (c *Client) BuildResourceRegistry() error {
 	c.ResourceRegistry = ResourceRegistry{
