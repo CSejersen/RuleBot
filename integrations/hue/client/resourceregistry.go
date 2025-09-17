@@ -32,6 +32,8 @@ func (r *ResourceRegistry) ResolveName(typ, id string) (string, bool) {
 		return res.Metadata.Name, true
 	case *types.RoomGet:
 		return res.Metadata.Name, true
+	case *types.SceneGet:
+		return res.Metadata.Name, true
 	case *types.GroupedLightGet:
 		return r.ResolveName(res.Owner.RType, res.Owner.RID)
 	default:
@@ -69,8 +71,7 @@ func (c *Client) BuildResourceRegistry() error {
 			if err := json.Unmarshal(raw, light); err != nil {
 				return err
 			}
-			err := c.ResourceRegistry.add(light)
-			if err != nil {
+			if err := c.ResourceRegistry.add(light); err != nil {
 				return fmt.Errorf("failed to add resource to registry: %w", err)
 			}
 
@@ -79,8 +80,16 @@ func (c *Client) BuildResourceRegistry() error {
 			if err := json.Unmarshal(raw, room); err != nil {
 				return err
 			}
-			err := c.ResourceRegistry.add(room)
-			if err != nil {
+			if err := c.ResourceRegistry.add(room); err != nil {
+				return fmt.Errorf("failed to add resource to registry: %w", err)
+			}
+
+		case "scene":
+			scene := &types.SceneGet{}
+			if err := json.Unmarshal(raw, scene); err != nil {
+				return err
+			}
+			if err := c.ResourceRegistry.add(scene); err != nil {
 				return fmt.Errorf("failed to add resource to registry: %w", err)
 			}
 
@@ -94,9 +103,7 @@ func (c *Client) BuildResourceRegistry() error {
 				return fmt.Errorf("failed to add resource to registry: %w", err)
 			}
 		}
-
 	}
-
 	return nil
 }
 
@@ -113,6 +120,8 @@ func (r *ResourceRegistry) add(resource Resource) error {
 	case *types.LightGet:
 		name = res.Metadata.Name
 	case *types.RoomGet:
+		name = res.Metadata.Name
+	case *types.SceneGet:
 		name = res.Metadata.Name
 	case *types.GroupedLightGet:
 		// grouped lights do not have names, stored only in ByTypeAndID
