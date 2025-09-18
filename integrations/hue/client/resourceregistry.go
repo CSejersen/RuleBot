@@ -1,10 +1,12 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/integrations/hue/client/types"
+	"time"
 )
 
 type Resource interface {
@@ -67,7 +69,12 @@ func (c *Client) BuildResourceRegistry() error {
 		Data   []json.RawMessage `json:"data"`
 	}{}
 
-	err := c.get("resource", &getResourceResp)
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	err := c.get(ctx, "resource", &getResourceResp)
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -10,7 +9,6 @@ import (
 	"home_automation_server/engine/rules"
 	"home_automation_server/engine/statestore"
 	"os"
-	"strings"
 	"sync"
 	"time"
 )
@@ -26,15 +24,18 @@ type Engine struct {
 	EventChannel <-chan pubsub.Event
 
 	// Execute actions
+	ActionTimeout time.Duration
+	RetryPolicy   RetryPolicy
 	ruleTaskQueue chan *RuleTask
 	wg            sync.WaitGroup
 	nWorkers      int
 
-	// Keep track of time-based triggers
-	ruleTimers map[string]*time.Timer // key: rule_alias+trigger hash
-	timersMu   sync.Mutex
-
 	Logger *zap.Logger
+}
+
+type RetryPolicy struct {
+	MaxAttempts int
+	Backoff     time.Duration
 }
 
 func New(ctx context.Context, logger *zap.Logger, nWorkers int) (*Engine, error) {
@@ -49,6 +50,11 @@ func New(ctx context.Context, logger *zap.Logger, nWorkers int) (*Engine, error)
 		PS:           ps,
 		EventChannel: ps.Subscribe(),
 
+		ActionTimeout: 5 * time.Second,
+		RetryPolicy: RetryPolicy{
+			MaxAttempts: 3,
+			Backoff:     2 * time.Second,
+		},
 		ruleTaskQueue: make(chan *RuleTask),
 		nWorkers:      nWorkers,
 
@@ -85,22 +91,6 @@ func (e *Engine) startWorkers() {
 			}
 		}(i)
 	}
-}
-
-func (e *Engine) executeAction(a *rules.Action) error {
-	split := strings.Split(a.Service, ".")
-	if len(split) != 2 {
-		return fmt.Errorf("invalid service format: %s", a.Service)
-	}
-
-	domain := split[0]
-	service := split[1]
-
-	e.Logger.Debug("Calling service", zap.String("service", a.Service), zap.Any("params", a.Params))
-	if err := e.ServiceRegistry.Call(domain, service, a); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (e *Engine) RegisterIntegration(i Integration) {

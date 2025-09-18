@@ -1,10 +1,12 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
+	"time"
 )
 
 type UpdateButton struct {
@@ -19,8 +21,7 @@ type UpdateButtonContent struct {
 	Icon string `json:"icon,omitempty"`
 }
 
-func (c *Client) UpdateButtonValue(id string, val int) error {
-
+func (c *Client) UpdateButtonValue(ctx context.Context, id string, val int) error {
 	update := UpdateCommand[UpdateButton]{
 		Update: UpdateButton{
 			Type:  "button",
@@ -36,6 +37,13 @@ func (c *Client) UpdateButtonValue(id string, val int) error {
 	if err != nil {
 		c.Logger.Error("failed to marshal update request", zap.Error(err))
 		return err
+	}
+
+	if deadline, ok := ctx.Deadline(); ok {
+		// ok to ignore error - if connection is broken we will log the error when writing.
+		c.Conn.SetWriteDeadline(deadline)
+	} else {
+		c.Conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	}
 
 	err = c.Conn.WriteMessage(websocket.TextMessage, bytes)

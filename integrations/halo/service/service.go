@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"go.uber.org/zap"
 	"home_automation_server/engine"
 	"home_automation_server/engine/rules"
@@ -18,7 +19,7 @@ func (s *Service) ExportServices() map[string]engine.ServiceHandler {
 	}
 }
 
-func (s *Service) UpdateButtonValue(action *rules.Action) error {
+func (s *Service) UpdateButtonValue(ctx context.Context, action *rules.Action) error {
 	id, err := s.Client.ResolveBtnId(action.Target.ID)
 	if err != nil {
 		s.Logger.Error("Failed to resolve button id", zap.String("id", id), zap.Error(err))
@@ -30,5 +31,5 @@ func (s *Service) UpdateButtonValue(action *rules.Action) error {
 		return err
 	}
 
-	return s.Client.UpdateButtonValue(id, int(value))
+	return s.Client.UpdateButtonValue(ctx, id, int(value))
 }

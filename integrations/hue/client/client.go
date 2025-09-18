@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -42,19 +43,19 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-func (c *Client) get(path string, v interface{}) error {
-	return c.doApiV2Request(http.MethodGet, path, nil, v)
+func (c *Client) get(ctx context.Context, path string, v interface{}) error {
+	return c.doApiV2Request(ctx, http.MethodGet, path, nil, v)
 }
 
-func (c *Client) post(path string, body, v interface{}) error {
-	return c.doApiV2Request(http.MethodPost, path, body, v)
+func (c *Client) post(ctx context.Context, path string, body, v interface{}) error {
+	return c.doApiV2Request(ctx, http.MethodPost, path, body, v)
 }
 
-func (c *Client) put(path string, body, v interface{}) error {
-	return c.doApiV2Request(http.MethodPut, path, body, v)
+func (c *Client) put(ctx context.Context, path string, body, v interface{}) error {
+	return c.doApiV2Request(ctx, http.MethodPut, path, body, v)
 }
 
-func (c *Client) doApiV2Request(method, path string, body interface{}, v interface{}) error {
+func (c *Client) doApiV2Request(ctx context.Context, method, path string, body interface{}, v interface{}) error {
 	url := fmt.Sprintf("https://%s/clip/v2/%s", c.IP, path)
 
 	var bodyReader io.Reader
@@ -66,7 +67,7 @@ func (c *Client) doApiV2Request(method, path string, body interface{}, v interfa
 		bodyReader = bytes.NewReader(buf)
 	}
 
-	req, err := http.NewRequest(method, url, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/engine"
@@ -21,7 +22,7 @@ func (s *Service) ExportServices() map[string]engine.ServiceHandler {
 	}
 }
 
-func (s *Service) StepBrightness(action *rules.Action) error {
+func (s *Service) StepBrightness(ctx context.Context, action *rules.Action) error {
 	id, ok := s.Client.ResourceRegistry.ResolveName(action.Target.Typ, action.Target.ID)
 	if !ok {
 		return fmt.Errorf("unable to resolve device id %s.%s", action.Target.Typ, action.Target.ID)
@@ -37,13 +38,13 @@ func (s *Service) StepBrightness(action *rules.Action) error {
 
 	switch action.Target.Typ {
 	case "light":
-		return s.Client.LightStepBrightness(id, math.Abs(float64(step)), direction)
+		return s.Client.LightStepBrightness(ctx, id, math.Abs(float64(step)), direction)
 	default:
 		return fmt.Errorf("unknown target type: %s", action.Target.Typ)
 	}
 }
 
-func (s *Service) Toggle(action *rules.Action) error {
+func (s *Service) Toggle(ctx context.Context, action *rules.Action) error {
 	on, err := action.BooleanParam("on")
 	if err != nil {
 		return err
@@ -56,7 +57,7 @@ func (s *Service) Toggle(action *rules.Action) error {
 
 	switch action.Target.Typ {
 	case "light":
-		return s.Client.LightToggle(target, !on)
+		return s.Client.LightToggle(ctx, target, !on)
 	default:
 		return fmt.Errorf("unknown target type: %s", action.Target.Typ)
 	}

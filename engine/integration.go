@@ -20,7 +20,7 @@ type EventAggregator interface {
 	Flush() *pubsub.Event
 }
 
-type ServiceHandler func(action *rules.Action) error
+type ServiceHandler func(ctx context.Context, action *rules.Action) error
 
 type Integration struct {
 	Name        string

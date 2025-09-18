@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"home_automation_server/engine/rules"
@@ -26,7 +27,7 @@ func (r *ServiceRegistry) Register(domain, service string, handler ServiceHandle
 	r.services[key] = handler
 }
 
-func (r *ServiceRegistry) Call(domain, service string, action *rules.Action) error {
+func (r *ServiceRegistry) Call(ctx context.Context, domain, service string, action *rules.Action) error {
 	key := getKey(domain, service)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -34,7 +35,7 @@ func (r *ServiceRegistry) Call(domain, service string, action *rules.Action) err
 	if !ok {
 		return errors.New(fmt.Sprintf("service %s not registered yet", key))
 	}
-	return handler(action)
+	return handler(ctx, action)
 }
 
 func getKey(domain, service string) string {

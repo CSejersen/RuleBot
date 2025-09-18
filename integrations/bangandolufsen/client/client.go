@@ -43,19 +43,19 @@ func (c *Client) init(ctx context.Context, configPath string) error {
 	return nil
 }
 
-func (c *Client) get(ip, path string, v interface{}) error {
-	return c.doRequest(http.MethodGet, ip, path, nil, v)
+func (c *Client) get(ctx context.Context, ip, path string, v interface{}) error {
+	return c.doRequest(ctx, http.MethodGet, ip, path, nil, v)
 }
 
-func (c *Client) post(ip, path string, body, v interface{}) error {
-	return c.doRequest(http.MethodPost, ip, path, body, v)
+func (c *Client) post(ctx context.Context, ip, path string, body, v interface{}) error {
+	return c.doRequest(ctx, http.MethodPost, ip, path, body, v)
 }
 
-func (c *Client) put(ip, path string, body, v interface{}) error {
-	return c.doRequest(http.MethodPut, ip, path, body, v)
+func (c *Client) put(ctx context.Context, ip, path string, body, v interface{}) error {
+	return c.doRequest(ctx, http.MethodPut, ip, path, body, v)
 }
 
-func (c *Client) doRequest(method, ip, path string, body interface{}, v interface{}) error {
+func (c *Client) doRequest(ctx context.Context, method, ip, path string, body interface{}, v interface{}) error {
 	url := fmt.Sprintf("http://%s/api/v1/%s", ip, path)
 
 	var bodyReader io.Reader
@@ -67,7 +67,7 @@ func (c *Client) doRequest(method, ip, path string, body interface{}, v interfac
 		bodyReader = bytes.NewReader(buf)
 	}
 
-	req, err := http.NewRequest(method, url, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
 		return err
 	}

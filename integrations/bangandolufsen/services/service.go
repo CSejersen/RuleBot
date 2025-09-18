@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/engine"
@@ -20,7 +21,7 @@ func (s *Service) ExportServices() map[string]engine.ServiceHandler {
 	}
 }
 
-func (s *Service) SetPlaybackSource(action *rules.Action) error {
+func (s *Service) SetPlaybackSource(ctx context.Context, action *rules.Action) error {
 	source, err := action.StringParam("source")
 	if err != nil {
 		s.Logger.Error("Error getting 'source' param", zap.Error(err))
@@ -34,7 +35,7 @@ func (s *Service) SetPlaybackSource(action *rules.Action) error {
 
 	switch device.IsMozart {
 	case true:
-		if err := s.Client.SetPlaybackSource(device.IP, source); err != nil {
+		if err := s.Client.SetPlaybackSource(ctx, device.IP, source); err != nil {
 			return fmt.Errorf("failed to set playback source: %w", err)
 		}
 		return nil
@@ -46,7 +47,7 @@ func (s *Service) SetPlaybackSource(action *rules.Action) error {
 	return nil
 }
 
-func (s *Service) ExpandExperience(action *rules.Action) error {
+func (s *Service) ExpandExperience(ctx context.Context, action *rules.Action) error {
 	device, ok := s.Client.Config.Devices[action.Target.ID]
 	if !ok {
 		return fmt.Errorf("device %s not found", action.Target.ID)
@@ -62,7 +63,7 @@ func (s *Service) ExpandExperience(action *rules.Action) error {
 		return fmt.Errorf("device %s not found", expandTo)
 	}
 
-	if err := s.Client.ExpandExperience(device.IP, toDevice.JID); err != nil {
+	if err := s.Client.ExpandExperience(ctx, device.IP, toDevice.JID); err != nil {
 		return fmt.Errorf("failed to expand experience: %w", err)
 	}
 	return nil

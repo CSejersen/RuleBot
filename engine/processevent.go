@@ -2,9 +2,13 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/engine/pubsub"
 	"home_automation_server/engine/rules"
+	"strings"
+	"time"
 )
 
 type RuleTask struct {
@@ -52,20 +56,77 @@ func (e *Engine) executeRuleTask(task *RuleTask, workerID int) {
 		action.Params = resolved
 
 		if action.Blocking {
+			ctx := context.Background()
+			if e.ActionTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, e.ActionTimeout)
+				defer cancel()
+			}
 			// Wait for completion
-			if err := e.executeAction(action); err != nil {
-				e.Logger.Error("Failed blocking action", zap.String("service", action.Service), zap.Error(err))
+			if err := e.executeActionWithRetry(ctx, action); err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					e.Logger.Warn("Action timed out", zap.String("service", action.Service))
+				} else {
+					e.Logger.Error("Failed blocking action", zap.String("service", action.Service), zap.Error(err))
+				}
 				break // stop further actions in this rule
 			}
 		} else {
 			// fire-and-forget
-			go func(act *rules.Action) {
-				if err := e.executeAction(act); err != nil {
-					e.Logger.Error("Failed non-blocking action", zap.String("service", act.Service), zap.Error(err))
+			go func(action *rules.Action) {
+				// each goroutine gets its own cancel
+				ctx := context.Background()
+				if e.ActionTimeout > 0 {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, e.ActionTimeout)
+					defer cancel()
+				}
+
+				if err := e.executeActionWithRetry(ctx, action); err != nil {
+					e.Logger.Error("Failed non-blocking action", zap.String("service", action.Service), zap.Error(err))
 				}
 			}(action)
 		}
 	}
+}
+
+func (e *Engine) executeActionWithRetry(ctx context.Context, action *rules.Action) error {
+	var err error
+	for attempt := 1; attempt <= e.RetryPolicy.MaxAttempts; attempt++ {
+		err = e.executeAction(ctx, action)
+		if err == nil {
+			return nil
+		}
+
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		e.Logger.Warn("Action failed, retrying",
+			zap.String("service", action.Service),
+			zap.Int("attempt", attempt),
+			zap.Error(err),
+		)
+
+		time.Sleep(e.RetryPolicy.Backoff)
+	}
+	return fmt.Errorf("action failed after %d attempts: %w", e.RetryPolicy.MaxAttempts, err)
+}
+
+func (e *Engine) executeAction(ctx context.Context, a *rules.Action) error {
+	split := strings.Split(a.Service, ".")
+	if len(split) != 2 {
+		return fmt.Errorf("invalid service format: %s", a.Service)
+	}
+
+	domain := split[0]
+	service := split[1]
+
+	e.Logger.Debug("Calling service", zap.String("service", a.Service), zap.Any("params", a.Params))
+	if err := e.ServiceRegistry.Call(ctx, domain, service, a); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (e *Engine) queueRuleTask(rule *rules.Rule, event *pubsub.Event) {

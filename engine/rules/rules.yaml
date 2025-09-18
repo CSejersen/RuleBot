@@ -63,7 +63,7 @@ rules:
         params:
           scene: "movie"
 
-  - alias: "Play Record"
+  - alias: "Halo: Play Record"
     trigger:
       event: "halo.button"
       entity_name: "Play Record"
