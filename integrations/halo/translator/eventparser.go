@@ -5,23 +5,24 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/integrations/halo/translator/events"
+	"home_automation_server/integrations/types"
 )
 
-// EventParser parses raw bytes into the correct event type
+// EventParser parses raw bytes into the correct types type
 type EventParser struct {
 	Logger        *zap.Logger
-	EventRegistry map[string]func() events.Event
+	EventRegistry map[string]types.EventData
 }
 
 func newEventParser(logger *zap.Logger) EventParser {
 	return EventParser{
 		Logger:        logger,
-		EventRegistry: make(map[string]func() events.Event),
+		EventRegistry: make(map[string]types.EventData),
 	}
 }
 
-// ParseEvent parses any event based on the eventRegistry
-func (p *EventParser) ParseEvent(b []byte) (events.Event, error) {
+// ParseEvent parses any types based on the eventRegistry
+func (p *EventParser) ParseEvent(b []byte) (types.SourceEvent, error) {
 	var raw events.RawEvent
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return nil, err
@@ -32,12 +33,12 @@ func (p *EventParser) ParseEvent(b []byte) (events.Event, error) {
 		return nil, err
 	}
 
-	constructor, ok := p.EventRegistry[base.Type]
+	eventData, ok := p.EventRegistry[base.Type]
 	if !ok {
 		return nil, fmt.Errorf("unsupported event type: %s", base.Type)
 	}
 
-	event := constructor()
+	event := eventData.Constructor()
 	if err := json.Unmarshal(raw.Event, event); err != nil {
 		return nil, err
 	}
@@ -46,6 +47,6 @@ func (p *EventParser) ParseEvent(b []byte) (events.Event, error) {
 }
 
 // RegisterEvent registers a constructor for a type string
-func (p EventParser) RegisterEvent(eventType string, constructor func() events.Event) {
-	p.EventRegistry[eventType] = constructor
+func (p *EventParser) RegisterEvent(eventType string, data types.EventData) {
+	p.EventRegistry[eventType] = data
 }

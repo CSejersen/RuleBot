@@ -19,10 +19,6 @@ type Config struct {
 	Pages   []*Page `yaml:"pages" json:"pages"`
 }
 
-type Registry struct {
-	Buttons map[string]*Button
-}
-
 // implement a fs watcher for the rules file to update the config on changes.
 func (c *Client) loadConfig(path string) error {
 	data, err := os.ReadFile(path)

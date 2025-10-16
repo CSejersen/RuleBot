@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"go.uber.org/zap"
-	"home_automation_server/engine"
 	"home_automation_server/engine/rules"
 	"home_automation_server/integrations/halo/client"
+	"home_automation_server/integrations/types"
 )
 
 type Service struct {
@@ -13,9 +13,20 @@ type Service struct {
 	Logger *zap.Logger
 }
 
-func (s *Service) ExportServices() map[string]engine.ServiceHandler {
-	return map[string]engine.ServiceHandler{
-		"update_button_value": s.UpdateButtonValue,
+func (s *Service) ExportServices() map[string]types.ServiceData {
+	return map[string]types.ServiceData{
+		"update_button_value": {
+			FullName: "halo.update_button_value",
+			Handler:  s.UpdateButtonValue,
+			RequiredParams: map[string]types.ParamMetadata{
+				"value": {
+					DataType:    "float",
+					Description: "New value for button, between 0..100",
+				},
+			},
+			RequiresTargetType: false,
+			RequiresTargetID:   true,
+		},
 	}
 }
 

@@ -2,14 +2,16 @@ package translator
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"home_automation_server/engine/pubsub"
+	enginetypes "home_automation_server/engine/types"
 	"home_automation_server/integrations/hue/client"
 	"home_automation_server/integrations/hue/translator/events"
+	"home_automation_server/integrations/types"
 	"time"
 )
 
-// Translator translates a parsed hue event into a pubsub.Event
+// Translator translates a parsed hue types into a pubsub.Event
 type Translator struct {
 	Client      *client.Client
 	EventParser EventParser
@@ -39,60 +41,59 @@ func (t *Translator) init() error {
 	return nil
 }
 
-func (t *Translator) Translate(raw []byte) ([]pubsub.Event, error) {
+func (t *Translator) Translate(raw []byte) ([]enginetypes.Event, error) {
 	eventBatch, err := t.EventParser.parse(raw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse events: %w", err)
 	}
 
-	// TODO: if switch cases grow beyond what is reasonable we could implement a map of event type to translator-func
-	translatedEvents := []pubsub.Event{}
+	// TODO: if switch cases grow beyond what is reasonable we could implement a map of types type to translator-func
+	translatedEvents := []enginetypes.Event{}
 	for _, e := range eventBatch.Events {
 		switch e.GetType() {
 		case "light":
 			// a light event might contain multiple changes, a separate event is emitted for each change.
-			psEvents, err := t.translateLightUpdate(e, eventBatch.TimeStamp)
+			translated, err := t.translateLightUpdate(e, eventBatch.TimeStamp)
 			if err != nil {
 				t.Logger.Error("failed to translate light update", zap.Error(err))
 				continue
 			}
-			translatedEvents = append(translatedEvents, psEvents...)
+			translatedEvents = append(translatedEvents, translated...)
 
 		case "grouped_light":
 			// a grouped_light event might contain multiple changes, a separate event is emitted for each change.
-			psEvents, err := t.translateGroupedLightUpdate(e, eventBatch.TimeStamp)
+			translated, err := t.translateGroupedLightUpdate(e, eventBatch.TimeStamp)
 			if err != nil {
 				continue
 			}
-			translatedEvents = append(translatedEvents, psEvents...)
+			translatedEvents = append(translatedEvents, translated...)
 
 		case "scene":
-			t.Logger.Debug("translating scene event")
-			psEvent, err := t.translateSceneUpdate(e, eventBatch.TimeStamp)
+			translated, err := t.translateSceneUpdate(e, eventBatch.TimeStamp)
 			if err != nil {
 				continue
 			}
-			translatedEvents = append(translatedEvents, psEvent)
+			translatedEvents = append(translatedEvents, translated)
 
 		default:
-			t.Logger.Debug("unknown event", zap.String("type", e.GetType()))
+			t.Logger.Debug("unknown types", zap.String("type", e.GetType()))
 		}
 
 	}
 	return translatedEvents, nil
 }
 
-func (t *Translator) translateSceneUpdate(e events.Event, ts time.Time) (pubsub.Event, error) {
+func (t *Translator) translateSceneUpdate(e types.SourceEvent, ts time.Time) (enginetypes.Event, error) {
 	sceneUpdate, ok := e.(*events.SceneUpdate)
 	if !ok {
-		t.Logger.Error("failed to type assert on sceneUpdate", zap.Any("event", e))
-		return pubsub.Event{}, fmt.Errorf("expected a *SceneUpdate for event type 'scene'")
+		t.Logger.Error("failed to type assert on sceneUpdate", zap.Any("types", e))
+		return enginetypes.Event{}, fmt.Errorf("expected a *SceneUpdate for types type 'scene'")
 	}
 
 	active := sceneUpdate.SafeActive()
 	if active == nil {
 		t.Logger.Error("no status.active for scene update", zap.Any("scene_update", sceneUpdate))
-		return pubsub.Event{}, fmt.Errorf("no status.active for scene update")
+		return enginetypes.Event{}, fmt.Errorf("no status.active for scene update")
 	}
 
 	humanID, ok := t.Client.ResourceRegistry.ResolveName(sceneUpdate.Type, sceneUpdate.ID)
@@ -105,7 +106,8 @@ func (t *Translator) translateSceneUpdate(e events.Event, ts time.Time) (pubsub.
 		t.Logger.Error("failed to lookup group", zap.String("type", sceneUpdate.Type), zap.String("id", sceneUpdate.ID))
 	}
 
-	return pubsub.Event{
+	return enginetypes.Event{
+		Id:          uuid.NewString(),
 		Source:      "hue",
 		Type:        "scene",
 		Entity:      humanID,
@@ -118,22 +120,23 @@ func (t *Translator) translateSceneUpdate(e events.Event, ts time.Time) (pubsub.
 	}, nil
 }
 
-func (t *Translator) translateLightUpdate(e events.Event, ts time.Time) ([]pubsub.Event, error) {
+func (t *Translator) translateLightUpdate(e types.SourceEvent, ts time.Time) ([]enginetypes.Event, error) {
 	lightEvent, ok := e.(*events.LightUpdate)
 	if !ok {
-		return []pubsub.Event{}, fmt.Errorf("expected a *LightUpdate for event type 'light'")
+		return []enginetypes.Event{}, fmt.Errorf("expected a *LightUpdate for types type 'light'")
 	}
 
 	humanID, ok := t.Client.ResourceRegistry.ResolveName(lightEvent.Type, lightEvent.ID)
 	if !ok {
 		t.Logger.Warn("failed to lookup name", zap.String("type", lightEvent.Type), zap.String("id", lightEvent.ID))
-		return []pubsub.Event{}, fmt.Errorf("failed to lookup name")
+		return []enginetypes.Event{}, fmt.Errorf("failed to lookup name")
 	}
 
-	psEvents := []pubsub.Event{}
+	psEvents := []enginetypes.Event{}
 	// a light event might contain multiple changes, a separate event is emitted for each change.
 	for _, change := range lightEvent.ResolveStateChanges() {
-		event := pubsub.Event{
+		event := enginetypes.Event{
+			Id:          uuid.NewString(),
 			Source:      "hue",
 			Type:        "light",
 			Entity:      humanID,
@@ -155,21 +158,22 @@ func (t *Translator) translateLightUpdate(e events.Event, ts time.Time) ([]pubsu
 	return psEvents, nil
 }
 
-func (t *Translator) translateGroupedLightUpdate(e events.Event, ts time.Time) ([]pubsub.Event, error) {
+func (t *Translator) translateGroupedLightUpdate(e types.SourceEvent, ts time.Time) ([]enginetypes.Event, error) {
 	groupedLightEvent, ok := e.(*events.GroupedLightUpdate)
 	if !ok {
-		return []pubsub.Event{}, fmt.Errorf("expected a *GroupedLightUpdate for event type 'grouped_light'")
+		return []enginetypes.Event{}, fmt.Errorf("expected a *GroupedLightUpdate for types type 'grouped_light'")
 	}
 
 	humanID, ok := t.Client.ResourceRegistry.ResolveName(groupedLightEvent.Type, groupedLightEvent.ID)
 	if !ok {
-		return []pubsub.Event{}, fmt.Errorf("failed to lookup name")
+		return []enginetypes.Event{}, fmt.Errorf("failed to lookup name")
 	}
 
-	psEvents := []pubsub.Event{}
-	// a grouped_light event might contain multiple changes, a separate event is emitted for each change.
+	translated := []enginetypes.Event{}
+	// a grouped_light types might contain multiple changes, a separate types is emitted for each change.
 	for _, change := range groupedLightEvent.ResolveStateChanges() {
-		event := pubsub.Event{
+		event := enginetypes.Event{
+			Id:          uuid.NewString(),
 			Source:      "hue",
 			Type:        "grouped_light",
 			Entity:      humanID,
@@ -186,13 +190,29 @@ func (t *Translator) translateGroupedLightUpdate(e events.Event, ts time.Time) (
 			},
 			Time: ts,
 		}
-		psEvents = append(psEvents, event)
+		translated = append(translated, event)
 	}
-	return psEvents, nil
+	return translated, nil
 }
 
 func (t *Translator) LoadEvents() {
-	for typ, constructor := range events.Registry {
-		t.EventParser.RegisterEvent(typ, constructor)
+	for typ, data := range events.Registry {
+		t.EventParser.RegisterEvent(typ, data)
 	}
+}
+
+func (t *Translator) EventTypes() []string {
+	eventTypes := []string{}
+	for k, _ := range t.EventParser.EventRegistry {
+		eventTypes = append(eventTypes, k)
+	}
+	return eventTypes
+}
+
+func (t *Translator) EntitiesForType(typ string) []string {
+	return t.Client.ResourceRegistry.EntityNamesForType(typ)
+}
+
+func (t *Translator) StateChangesForType(typ string) []string {
+	return t.EventParser.EventRegistry[typ].StateChanges
 }

@@ -87,3 +87,13 @@ func (c *Client) writeLoop(done chan<- struct{}) {
 		}
 	}
 }
+
+func (c *Client) ButtonNames() []string {
+	buttons := []string{}
+	for _, page := range c.Config.Pages {
+		for _, button := range page.Buttons {
+			buttons = append(buttons, button.Title)
+		}
+	}
+	return buttons
+}

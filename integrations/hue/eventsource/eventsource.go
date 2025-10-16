@@ -31,6 +31,8 @@ func (s *EventSource) Run(ctx context.Context, out chan<- []byte) error {
 		err := s.connectAndStream(ctx, out)
 		if err != nil {
 			s.Logger.Error("hue event stream disconnected", zap.Error(err))
+		} else {
+			s.Logger.Info("hue event stream closed gracefully")
 		}
 
 		select {

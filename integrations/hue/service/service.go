@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"go.uber.org/zap"
-	"home_automation_server/engine"
 	"home_automation_server/engine/rules"
 	"home_automation_server/integrations/hue/client"
+	"home_automation_server/integrations/types"
 	"math"
 )
 
@@ -15,15 +15,41 @@ type Service struct {
 	Logger *zap.Logger
 }
 
-func (s *Service) ExportServices() map[string]engine.ServiceHandler {
-	return map[string]engine.ServiceHandler{
-		"step_brightness": s.StepBrightness,
-		"toggle":          s.Toggle,
+func (s *Service) ExportServices() map[string]types.ServiceData {
+	return map[string]types.ServiceData{
+		"step_brightness": {
+			FullName: "hue.step_brightness",
+			Handler:  s.StepBrightness,
+			RequiredParams: map[string]types.ParamMetadata{
+				"direction": {
+					DataType:    "string",
+					Description: "One of: up, down",
+				},
+				"step": {
+					DataType:    "int",
+					Description: "Maximum 100, clips at Max-level or Min-level.",
+				},
+			},
+			RequiresTargetType: true,
+			RequiresTargetID:   true,
+		},
+		"toggle": {
+			FullName: "hue.toggle",
+			Handler:  s.Toggle,
+			RequiredParams: map[string]types.ParamMetadata{
+				"on": {
+					DataType:    "bool",
+					Description: "The current on_state (get from stateStore)",
+				},
+			},
+			RequiresTargetType: true,
+			RequiresTargetID:   true,
+		},
 	}
 }
 
 func (s *Service) StepBrightness(ctx context.Context, action *rules.Action) error {
-	id, ok := s.Client.ResourceRegistry.ResolveName(action.Target.Typ, action.Target.ID)
+	id, ok := s.Client.ResourceRegistry.ByTypeAndName[action.Target.Typ][action.Target.ID]
 	if !ok {
 		return fmt.Errorf("unable to resolve device id %s.%s", action.Target.Typ, action.Target.ID)
 	}

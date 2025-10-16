@@ -23,6 +23,36 @@ type BaseResource struct {
 	Type string `json:"type"`
 }
 
+func (r *ResourceRegistry) EntityNamesForType(typ string) []string {
+	entityNames := []string{}
+
+	if byName, ok := r.ByTypeAndName[typ]; ok {
+		for name := range byName {
+			entityNames = append(entityNames, name)
+		}
+	}
+
+	if len(entityNames) == 0 {
+		if byID, ok := r.ByTypeAndID[typ]; ok {
+			for _, resource := range byID {
+				switch res := resource.(type) {
+				case *types.GroupedLightGet:
+					if ownerName, ok := r.ResolveName(res.Owner.RType, res.Owner.RID); ok {
+						entityNames = append(entityNames, ownerName)
+					} else {
+						continue
+					}
+				default:
+					// fallback, use ID
+					entityNames = append(entityNames, res.GetID())
+				}
+			}
+		}
+	}
+
+	return entityNames
+}
+
 func (r *ResourceRegistry) ResolveName(typ, id string) (string, bool) {
 	resource, ok := r.ByTypeAndID[typ][id]
 	if !ok || resource == nil {
@@ -71,7 +101,7 @@ func (c *Client) BuildResourceRegistry() error {
 
 	ctx := context.Background()
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	err := c.get(ctx, "resource", &getResourceResp)

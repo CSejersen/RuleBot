@@ -1,9 +1,9 @@
-package statestore
+package storage
 
 import (
 	"fmt"
 	"go.uber.org/zap"
-	"home_automation_server/engine/pubsub"
+	"home_automation_server/engine/types"
 	"home_automation_server/utils"
 	"strings"
 	"sync"
@@ -12,21 +12,13 @@ import (
 
 type StateStore struct {
 	mu     sync.RWMutex
-	states map[string]*State // key = integration:type:entity
+	states map[string]*types.State // key = integration:type:entity
 	Logger *zap.Logger
-}
-
-type State struct {
-	Integration string
-	Type        string
-	Entity      string
-	Fields      map[string]any
-	LastSeen    time.Time
 }
 
 func NewStateStore(logger *zap.Logger) *StateStore {
 	return &StateStore{
-		states: make(map[string]*State),
+		states: make(map[string]*types.State),
 		Logger: logger,
 	}
 }
@@ -36,16 +28,16 @@ func makeKey(source, typ, entity string) string {
 	return fmt.Sprintf("%s:%s:%s", utils.NormalizeString(source), utils.NormalizeString(typ), utils.NormalizeString(entity))
 }
 
-// ApplyEvent updates state based on an incoming event
-func (s *StateStore) ApplyEvent(e pubsub.Event) {
+// ApplyEvent updates state based on an incoming events
+func (s *StateStore) ApplyEvent(e types.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Apply the event to the stateStore
+	// Apply the types to the stateStore
 	key := makeKey(e.Source, e.Type, e.Entity)
 	state, ok := s.states[key]
 	if !ok {
-		state = &State{
+		state = &types.State{
 			Integration: utils.NormalizeString(e.Source),
 			Type:        utils.NormalizeString(e.Type),
 			Entity:      utils.NormalizeString(e.Entity),
@@ -65,7 +57,7 @@ func (s *StateStore) ApplyEvent(e pubsub.Event) {
 }
 
 // GetState returns a state snapshot for an entity
-func (s *StateStore) GetState(source, typ, entity string) (*State, bool) {
+func (s *StateStore) GetState(source, typ, entity string) (*types.State, bool) {
 	key := makeKey(source, typ, entity)
 	s.mu.RLock()
 	defer s.mu.RUnlock()

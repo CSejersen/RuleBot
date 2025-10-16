@@ -4,16 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"home_automation_server/engine/pubsub"
 	"home_automation_server/engine/rules"
+	"home_automation_server/engine/types"
 	"strings"
 	"time"
 )
 
 type RuleTask struct {
 	Actions []*rules.Action
-	Event   *pubsub.Event
+	Event   *types.Event
 }
 
 func (e *Engine) ProcessEvents(ctx context.Context) {
@@ -24,19 +25,29 @@ func (e *Engine) ProcessEvents(ctx context.Context) {
 				e.Logger.Info("context cancelled")
 				return
 			case event := <-e.EventChannel:
-				if err := e.processEvent(event); err != nil {
-					e.Logger.Warn("failed to process event", zap.Error(err))
+				if err := e.processEvent(ctx, event); err != nil {
+					e.Logger.Warn("failed to process events", zap.Error(err))
 				}
 			}
 		}
 	}()
 }
 
-func (e *Engine) processEvent(event pubsub.Event) error {
+func (e *Engine) processEvent(ctx context.Context, event types.Event) error {
 	// Update cached state
 	e.StateStore.ApplyEvent(event)
+	triggeredRules := []string{}
+
+	if event.Id == "" {
+		event.Id = uuid.NewString()
+	}
+
+	e.Logger.Debug("processing event", zap.Any("event", event))
 
 	for _, rule := range e.RuleSet.Rules {
+		if !rule.Active {
+			continue
+		}
 		if !rule.Trigger.Matches(event) {
 			continue
 		}
@@ -46,7 +57,23 @@ func (e *Engine) processEvent(event pubsub.Event) error {
 		}
 
 		e.queueRuleTask(&rule, &event)
+
+		err := e.RuleStore.UpdateLastTriggered(ctx, rule)
+		if err != nil {
+			e.Logger.Error("failed to update last triggered", zap.Error(err))
+		}
+		triggeredRules = append(triggeredRules, rule.Alias)
 	}
+
+	processedEvent := types.ProcessedEvent{
+		Event:          event,
+		TriggeredRules: triggeredRules,
+	}
+	if err := e.EventStore.SaveEvent(ctx, &processedEvent); err != nil {
+		return fmt.Errorf("failed to store event in db: %v", err)
+	}
+
+	e.ProcessedEventBus.Publish(processedEvent) // will be received by the ws-manager for real time updates in the UI.
 	return nil
 }
 
@@ -129,7 +156,7 @@ func (e *Engine) executeAction(ctx context.Context, a *rules.Action) error {
 	return nil
 }
 
-func (e *Engine) queueRuleTask(rule *rules.Rule, event *pubsub.Event) {
+func (e *Engine) queueRuleTask(rule *rules.Rule, event *types.Event) {
 	e.Logger.Info("queueing rule task", zap.String("rule", rule.Alias))
 
 	task := &RuleTask{
@@ -146,7 +173,7 @@ func (e *Engine) queueRuleTask(rule *rules.Rule, event *pubsub.Event) {
 	e.ruleTaskQueue <- task
 }
 
-func (e *Engine) ResolveActionParams(action *rules.Action, event *pubsub.Event) map[string]interface{} {
+func (e *Engine) ResolveActionParams(action *rules.Action, event *types.Event) map[string]interface{} {
 	e.Logger.Debug("Resolving action params", zap.Any("actionParams", action.Params), zap.Any("eventPayload", event.Payload))
 	resolved := make(map[string]interface{})
 	for k, v := range action.Params {

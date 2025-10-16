@@ -3,8 +3,8 @@ package engine
 import (
 	"context"
 	"go.uber.org/zap"
-	"home_automation_server/engine/pubsub"
-	"home_automation_server/engine/rules"
+	"home_automation_server/engine/types"
+	integrationtypes "home_automation_server/integrations/types"
 )
 
 type EventSource interface {
@@ -12,22 +12,23 @@ type EventSource interface {
 }
 
 type EventTranslator interface {
-	Translate(raw []byte) ([]pubsub.Event, error)
+	Translate(raw []byte) ([]types.Event, error)
+	EventTypes() []string
+	EntitiesForType(typ string) []string
+	StateChangesForType(typ string) []string
 }
 
 type EventAggregator interface {
-	Aggregate(pubsub.Event) *pubsub.Event
-	Flush() *pubsub.Event
+	Aggregate(types.Event) *types.Event
+	Flush() *types.Event
 }
-
-type ServiceHandler func(ctx context.Context, action *rules.Action) error
 
 type Integration struct {
 	Name        string
 	EventSource EventSource
 	Translator  EventTranslator
 	Aggregator  EventAggregator
-	Services    map[string]ServiceHandler // key = "domain.service"
+	Services    map[string]integrationtypes.ServiceData // key = "domain.service"
 }
 
 func IntegrationLogger(base *zap.Logger, name string) *zap.Logger {
@@ -43,13 +44,22 @@ func (s *NoopSource) Run(ctx context.Context, out chan<- []byte) error {
 	return ctx.Err()
 }
 
-func (s *NoopTranslator) Translate(raw []byte) ([]pubsub.Event, error) {
-	return []pubsub.Event{}, nil
+func (s *NoopTranslator) Translate(raw []byte) ([]types.Event, error) {
+	return []types.Event{}, nil
+}
+func (s *NoopTranslator) EventTypes() []string {
+	return []string{}
+}
+func (s *NoopTranslator) EntitiesForType(string) []string {
+	return []string{}
+}
+func (s *NoopTranslator) StateChangesForType(string) []string {
+	return []string{}
 }
 
-func (a *PassThroughAggregator) Aggregate(e pubsub.Event) *pubsub.Event {
+func (a *PassThroughAggregator) Aggregate(e types.Event) *types.Event {
 	return &e
 }
-func (a *PassThroughAggregator) Flush() *pubsub.Event {
+func (a *PassThroughAggregator) Flush() *types.Event {
 	return nil
 }

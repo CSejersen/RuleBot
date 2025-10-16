@@ -3,9 +3,10 @@ package translator
 import (
 	"errors"
 	"go.uber.org/zap"
-	"home_automation_server/engine/pubsub"
+	enginetypes "home_automation_server/engine/types"
 	"home_automation_server/integrations/halo/client"
 	"home_automation_server/integrations/halo/translator/events"
+	"home_automation_server/integrations/types"
 	"time"
 )
 
@@ -48,51 +49,52 @@ func (t *Translator) init() {
 	}
 }
 
-func (t *Translator) Translate(raw []byte) ([]pubsub.Event, error) {
+func (t *Translator) Translate(raw []byte) ([]enginetypes.Event, error) {
 	event, err := t.EventParser.ParseEvent(raw)
 	if err != nil {
+		t.Logger.Error("failed to parse event", zap.Error(err))
 		return nil, err
 	}
 
-	// If number of switch cases grows beyond what is reasonable we could implement a map of event type to translator-func
+	// If number of switch cases grows beyond what is reasonable we could implement a map of event-type to translator-func
 	switch event.GetType() {
 	case "wheel":
-		psEvent, err := t.translateWheelEvent(event)
+		translated, err := t.translateWheelEvent(event)
 		if err != nil {
-			t.Logger.Error("failed to translate wheel event", zap.Error(err))
-			return []pubsub.Event{}, err
+			t.Logger.Error("failed to translate wheel types", zap.Error(err))
+			return []enginetypes.Event{}, err
 		}
-		return []pubsub.Event{psEvent}, nil
+		return []enginetypes.Event{translated}, nil
 
 	case "button":
-		psEvent, err := t.translateButtonEvent(event)
+		translated, err := t.translateButtonEvent(event)
 		if err != nil {
-			t.Logger.Error("failed to translate button event", zap.Error(err))
-			return []pubsub.Event{}, err
+			t.Logger.Error("failed to translate button types", zap.Error(err))
+			return []enginetypes.Event{}, err
 		}
-		return []pubsub.Event{psEvent}, nil
+		return []enginetypes.Event{translated}, nil
 
 	case "system":
-		psEvent, err := t.translateSystemEvent(event)
+		translated, err := t.translateSystemEvent(event)
 		if err != nil {
-			t.Logger.Error("failed to translate system event", zap.Error(err))
-			return []pubsub.Event{}, err
+			t.Logger.Error("failed to translate system types", zap.Error(err))
+			return []enginetypes.Event{}, err
 		}
-		return []pubsub.Event{psEvent}, nil
+		return []enginetypes.Event{translated}, nil
 
 	default:
-		t.Logger.Info("translator not implemented, skipping event", zap.String("type", event.GetType()))
+		t.Logger.Info("translator not implemented, skipping types", zap.String("type", event.GetType()))
 	}
-	return []pubsub.Event{}, nil
+	return []enginetypes.Event{}, nil
 }
 
-func (t *Translator) translateSystemEvent(e events.Event) (pubsub.Event, error) {
+func (t *Translator) translateSystemEvent(e types.SourceEvent) (enginetypes.Event, error) {
 	sysEvent, ok := e.(*events.SystemEvent)
 	if !ok {
-		return pubsub.Event{}, nil
+		return enginetypes.Event{}, nil
 	}
 
-	return pubsub.Event{
+	return enginetypes.Event{
 		Source:      "halo",
 		Type:        "system",
 		StateChange: sysEvent.State,
@@ -101,10 +103,10 @@ func (t *Translator) translateSystemEvent(e events.Event) (pubsub.Event, error) 
 	}, nil
 }
 
-func (t *Translator) translateWheelEvent(e events.Event) (pubsub.Event, error) {
+func (t *Translator) translateWheelEvent(e types.SourceEvent) (enginetypes.Event, error) {
 	wheelEvent, ok := e.(*events.WheelEvent)
 	if !ok {
-		return pubsub.Event{}, errors.New("expected a *WheelEvent for event type 'wheel'")
+		return enginetypes.Event{}, errors.New("expected a *WheelEvent for types type 'wheel'")
 	}
 
 	humanID, ok := t.LookupName(wheelEvent.ID)
@@ -112,7 +114,7 @@ func (t *Translator) translateWheelEvent(e events.Event) (pubsub.Event, error) {
 		t.Logger.Warn("failed to lookup human id", zap.String("id", wheelEvent.ID))
 	}
 
-	return pubsub.Event{
+	return enginetypes.Event{
 		Source:      "halo",
 		Type:        "wheel",
 		Entity:      humanID,
@@ -124,10 +126,10 @@ func (t *Translator) translateWheelEvent(e events.Event) (pubsub.Event, error) {
 	}, nil
 }
 
-func (t *Translator) translateButtonEvent(e events.Event) (pubsub.Event, error) {
+func (t *Translator) translateButtonEvent(e types.SourceEvent) (enginetypes.Event, error) {
 	buttonEvent, ok := e.(*events.ButtonEvent)
 	if !ok {
-		return pubsub.Event{}, errors.New("expected a *ButtonEvent for event type 'button'")
+		return enginetypes.Event{}, errors.New("expected a *ButtonEvent for types type 'button'")
 	}
 
 	humanID, ok := t.LookupName(buttonEvent.ID)
@@ -135,7 +137,7 @@ func (t *Translator) translateButtonEvent(e events.Event) (pubsub.Event, error) 
 		t.Logger.Warn("failed to lookup human id", zap.String("id", buttonEvent.ID))
 	}
 
-	return pubsub.Event{
+	return enginetypes.Event{
 		Source:      "halo",
 		Type:        "button",
 		Entity:      humanID,
@@ -160,7 +162,26 @@ func (t *Translator) LookupName(id string) (string, bool) {
 }
 
 func (t *Translator) LoadEvents() {
-	for typ, constructor := range events.Registry {
-		t.EventParser.RegisterEvent(typ, constructor)
+	for typ, data := range events.Registry {
+		t.EventParser.RegisterEvent(typ, data)
 	}
+}
+
+func (t *Translator) EventTypes() []string {
+	eventTypes := []string{}
+	for k, _ := range t.EventParser.EventRegistry {
+		eventTypes = append(eventTypes, k)
+	}
+	return eventTypes
+}
+
+func (t *Translator) EntitiesForType(typ string) []string {
+	if typ == "system" {
+		return nil
+	}
+	return t.Client.ButtonNames()
+}
+
+func (t *Translator) StateChangesForType(typ string) []string {
+	return t.EventParser.EventRegistry[typ].StateChanges
 }

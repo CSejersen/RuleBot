@@ -4,20 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"go.uber.org/zap"
-	"home_automation_server/integrations/hue/translator/events"
+	"home_automation_server/integrations/types"
 	"time"
 )
 
-// EventParser parses raw bytes into the correct event type
+// EventParser parses raw bytes into the correct types type
 type EventParser struct {
 	Logger        *zap.Logger
-	EventRegistry map[string]func() events.Event
+	EventRegistry map[string]types.EventData
 }
 
 func newEventParser(logger *zap.Logger) EventParser {
 	return EventParser{
 		Logger:        logger,
-		EventRegistry: make(map[string]func() events.Event),
+		EventRegistry: make(map[string]types.EventData),
 	}
 }
 
@@ -33,7 +33,7 @@ type TypeWrapper struct {
 }
 
 type EventBatch struct {
-	Events    []events.Event
+	Events    []types.SourceEvent
 	TimeStamp time.Time
 }
 
@@ -50,30 +50,31 @@ func (p *EventParser) parse(b []byte) (EventBatch, error) {
 		envelopes = append(envelopes, single)
 	}
 
-	allEvents := []events.Event{}
+	allEvents := []types.SourceEvent{}
 	timeStamp := time.Time{}
 
 	for _, envelope := range envelopes {
 		if envelope.Type != "update" {
-			p.Logger.Info("Ignoring event envelope", zap.String("type", envelope.Type))
+			p.Logger.Info("Ignoring types envelope", zap.String("type", envelope.Type))
 			continue
 		}
 
 		for _, rawEvent := range envelope.RawData {
 			typeWrapper := TypeWrapper{}
 			if err := json.Unmarshal(rawEvent, &typeWrapper); err != nil {
-				p.Logger.Warn("Failed to read event type", zap.Error(err))
+				p.Logger.Warn("Failed to read types type", zap.Error(err))
 				continue
 			}
-			constructor, ok := p.EventRegistry[typeWrapper.Type]
+
+			eventData, ok := p.EventRegistry[typeWrapper.Type]
 			if !ok {
 				p.Logger.Info("Unsupported event type, skipping", zap.String("type", typeWrapper.Type))
 				continue
 			}
 
-			event := constructor()
+			event := eventData.Constructor()
 			if err := json.Unmarshal(rawEvent, event); err != nil {
-				p.Logger.Warn("Failed to unmarshal event", zap.String("type", typeWrapper.Type), zap.Error(err))
+				p.Logger.Warn("Failed to unmarshal types", zap.String("type", typeWrapper.Type), zap.Error(err))
 				continue
 			}
 
@@ -93,6 +94,6 @@ func (p *EventParser) parse(b []byte) (EventBatch, error) {
 }
 
 // RegisterEvent registers a constructor for an eventType string
-func (p *EventParser) RegisterEvent(eventType string, constructor func() events.Event) {
-	p.EventRegistry[eventType] = constructor
+func (p *EventParser) RegisterEvent(eventType string, data types.EventData) {
+	p.EventRegistry[eventType] = data
 }

@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
 	"github.com/joho/godotenv"
+	"go.uber.org/zap"
+	"home_automation_server/api"
 	"log"
+	"os"
+	"time"
 )
 
 func main() {
@@ -18,15 +23,36 @@ func main() {
 	defer logger.Sync()
 
 	logger.Info("Bootstrapping engine")
+
 	e, err := setupEngine(ctx, logger, 5)
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	registerIntegrations(ctx, e, logger)
+
+	// Setup API + WS Server
+	eventCh := e.ProcessedEventBus.Subscribe()
+	apiServer := api.NewServer(e, logger, eventCh)
+	port := os.Getenv("SERVER_PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	apiServer.Start(":" + port)
+
 	runEngine(e, logger, ctx)
 
 	logger.Info("Engine bootstrap succeeded")
+
 	<-ctx.Done()
 	logger.Info("Shutting down")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := apiServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Server shutdown failed", zap.Error(err))
+	}
+
 	e.Shutdown()
 }

@@ -1,22 +1,22 @@
 package rules
 
 import (
-	"home_automation_server/engine/statestore"
+	"home_automation_server/engine/types"
 	"strings"
 )
 
 type Condition struct {
-	Entity string `yaml:"entity"` // Integration.Typ.Entity_name
-	Field  string `yaml:"field"`  // "brightness"
+	Entity string `yaml:"entity" json:"entity"` // Integration.Typ.Entity_name
+	Field  string `yaml:"field" json:"field"`   // "brightness"
 
 	// Comparison operators
-	Equals      interface{} `yaml:"equals,omitempty"`
-	NotEquals   interface{} `yaml:"not_equals,omitempty"`
-	GreaterThan *float64    `yaml:"gt,omitempty"`
-	LessThan    *float64    `yaml:"lt,omitempty"`
+	Equals      interface{} `yaml:"equals,omitempty" json:"equals,omitempty"`
+	NotEquals   interface{} `yaml:"not_equals,omitempty" json:"not_equals,omitempty"`
+	GreaterThan *float64    `yaml:"gt,omitempty" json:"gt,omitempty"`
+	LessThan    *float64    `yaml:"lt,omitempty" json:"lt,omitempty"`
 }
 
-func (c *Condition) Matches(store *statestore.StateStore) bool {
+func (c *Condition) Matches(s types.StateGetter) bool {
 	splitEntity := strings.Split(c.Entity, ".")
 	if len(splitEntity) != 3 {
 		return false
@@ -27,7 +27,7 @@ func (c *Condition) Matches(store *statestore.StateStore) bool {
 
 	// TODO: add support for system-wide pseudo-entities like system.time.now
 
-	state, ok := store.GetState(source, typ, entity)
+	state, ok := s.GetState(source, typ, entity)
 	if !ok {
 		return false
 	}

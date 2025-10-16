@@ -6,15 +6,15 @@ import (
 )
 
 type Action struct {
-	Service  string         `yaml:"service"`
-	Target   Target         `yaml:"target,omitempty"`
-	Params   map[string]any `yaml:"params,omitempty"`
-	Blocking bool           `yaml:"blocking,omitempty"`
+	Service  string         `yaml:"service" json:"service"`
+	Target   Target         `yaml:"target,omitempty" json:"target,omitempty"`
+	Params   map[string]any `yaml:"params,omitempty" json:"params,omitempty"`
+	Blocking bool           `yaml:"blocking,omitempty" json:"blocking,omitempty"`
 }
 
 type Target struct {
-	Typ string `yaml:"type,omitempty"`
-	ID  string `yaml:"id"`
+	Typ string `yaml:"type,omitempty" json:"type,omitempty"`
+	ID  string `yaml:"id" json:"id"`
 }
 
 type TemplateRef struct {

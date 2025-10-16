@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"go.uber.org/zap"
-	"home_automation_server/engine"
 	"home_automation_server/engine/rules"
 	"home_automation_server/integrations/bangandolufsen/client"
+	"home_automation_server/integrations/types"
 )
 
 type Service struct {
@@ -14,10 +14,32 @@ type Service struct {
 	Logger *zap.Logger
 }
 
-func (s *Service) ExportServices() map[string]engine.ServiceHandler {
-	return map[string]engine.ServiceHandler{
-		"set_playback_source": s.SetPlaybackSource,
-		"expand_experience":   s.ExpandExperience,
+func (s *Service) ExportServices() map[string]types.ServiceData {
+	return map[string]types.ServiceData{
+		"set_playback_source": {
+			FullName: "bang_and_olufsen.set_playback_source",
+			Handler:  s.SetPlaybackSource,
+			RequiredParams: map[string]types.ParamMetadata{
+				"source": {
+					DataType:    "string",
+					Description: "the name of the source to activate",
+				},
+			},
+			RequiresTargetType: false,
+			RequiresTargetID:   true,
+		},
+		"expand_experience": {
+			FullName: "bang_and_olufsen.expand_experience",
+			Handler:  s.ExpandExperience,
+			RequiredParams: map[string]types.ParamMetadata{
+				"to": {
+					DataType:    "string",
+					Description: "the friendly name of the device to expand the experience to",
+				},
+			},
+			RequiresTargetType: false,
+			RequiresTargetID:   true,
+		},
 	}
 }
 

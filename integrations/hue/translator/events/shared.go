@@ -1,9 +1,5 @@
 package events
 
-type Event interface {
-	GetType() string
-}
-
 type XY struct {
 	X float64 `json:"x"` // 0-1
 	Y float64 `json:"y"` // 0-1

@@ -2,26 +2,27 @@ package eventaggregator
 
 import (
 	"go.uber.org/zap"
-	"home_automation_server/engine/pubsub"
+	"home_automation_server/engine/types"
 	"home_automation_server/integrations/halo/translator"
 	"sync"
 )
 
 type Aggregator struct {
 	mu          sync.Mutex
-	EventBuffer []pubsub.Event
+	EventBuffer []types.Event
 	Logger      *zap.Logger
 }
 
 func New(logger *zap.Logger) *Aggregator {
 	return &Aggregator{
 		mu:          sync.Mutex{},
-		EventBuffer: []pubsub.Event{},
+		EventBuffer: []types.Event{},
 		Logger:      logger,
 	}
 }
 
-func (a *Aggregator) Aggregate(e pubsub.Event) *pubsub.Event {
+func (a *Aggregator) Aggregate(e types.Event) *types.Event {
+	a.Logger.Debug("received event", zap.Any("event", e))
 	if e.Type != "wheel" {
 		return &e
 	}
@@ -31,7 +32,7 @@ func (a *Aggregator) Aggregate(e pubsub.Event) *pubsub.Event {
 	return nil // don’t emit yet
 }
 
-func (a *Aggregator) Flush() *pubsub.Event {
+func (a *Aggregator) Flush() *types.Event {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if len(a.EventBuffer) == 0 {
@@ -48,8 +49,8 @@ func (a *Aggregator) Flush() *pubsub.Event {
 	}
 
 	first := a.EventBuffer[0]
-	a.EventBuffer = []pubsub.Event{}
-	return &pubsub.Event{
+	a.EventBuffer = []types.Event{}
+	return &types.Event{
 		Source:      first.Source,
 		Type:        first.Type,
 		Entity:      first.Entity,

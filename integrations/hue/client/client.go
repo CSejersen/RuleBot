@@ -81,11 +81,6 @@ func (c *Client) doApiV2Request(ctx context.Context, method, path string, body i
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	//c.Logger.Debug("sending request",
-	//	zap.String("method", method),
-	//	zap.String("url", url),
-	//	zap.Any("body", body))
-
 	resp, err := c.client.Do(req)
 	if err != nil {
 		c.Logger.Error("request failed", zap.Error(err))
@@ -93,13 +88,20 @@ func (c *Client) doApiV2Request(ctx context.Context, method, path string, body i
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("unexpected status: %s\n%s", resp.Status, string(body))
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	if v != nil {
-		return json.NewDecoder(resp.Body).Decode(v)
+		if err := json.Unmarshal(respBody, v); err != nil {
+			return fmt.Errorf("failed to decode response: %w\nbody: %s", err, string(respBody))
+		}
 	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected status: %s\nbody: %s", resp.Status, string(respBody))
+	}
+
 	return nil
 }

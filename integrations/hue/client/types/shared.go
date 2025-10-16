@@ -2,12 +2,13 @@ package types
 
 // Get types
 type PutResponse struct {
-	Errors []ApiError           `json:"errors"`
-	Data   []ResourceIdentifier `json:"data"`
+	Errors []ApiError           `json:"errors,omitempty"`
+	Data   []ResourceIdentifier `json:"data,omitempty"`
 }
 
 type ApiError struct {
-	Description string `json:"description"`
+	Description string                 `json:"description"`
+	Details     map[string]interface{} `json:"details,omitempty"`
 }
 
 type ResourceIdentifier struct {

@@ -2,7 +2,7 @@ rules:
   - alias: "Halo: Increase Flower Pot brightness"
     trigger:
       event: "halo.wheel"
-      entity_name: "Flower Pot"
+      entity_name: "Flower pot"
       state_change: "clockwise"
     action:
       - service: "hue.step_brightness"
@@ -43,7 +43,7 @@ rules:
   - alias: "Halo: Update flower_pot button"
     trigger:
       event: "hue.light"
-      entity_name: "flower pot"
+      entity_name: "Flower Pot"
       state_change: "brightness"
     action:
       - service: "halo.update_button_value"

@@ -14,10 +14,6 @@ const (
 	SystemStateSleep   SystemState = "sleep"
 )
 
-type Event interface {
-	GetType() string
-}
-
 type RawEvent struct {
 	Event json.RawMessage `json:"event"`
 }
@@ -43,6 +39,17 @@ type SystemEvent struct {
 	State SystemState `json:"state"`
 }
 
-func (e *WheelEvent) GetType() string  { return e.Type }
+func (e *WheelEvent) GetType() string { return e.Type }
+func (e *WheelEvent) FillWithDummyData() {
+	e.ID = "dummy"
+	e.Counts = 1
+	e.Type = "wheel"
+}
+
 func (e *ButtonEvent) GetType() string { return e.Type }
+func (e *ButtonEvent) FillWithDummyData() {
+	e.ID = "dummy"
+	e.Type = "button"
+	e.State = ButtonStatePressed
+}
 func (e *SystemEvent) GetType() string { return e.Type }

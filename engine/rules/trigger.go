@@ -1,18 +1,18 @@
 package rules
 
 import (
-	"home_automation_server/engine/pubsub"
+	"home_automation_server/engine/types"
 	"home_automation_server/utils"
 	"strings"
 )
 
 type Trigger struct {
-	Event       string `yaml:"event"`
-	Entity      string `yaml:"entity_name,omitempty"`
-	StateChange string `yaml:"state_change"`
+	Event       string `yaml:"event" json:"event"`
+	Entity      string `yaml:"entity_name,omitempty" json:"entity_name,omitempty"`
+	StateChange string `yaml:"state_change" json:"state_change"`
 }
 
-func (t *Trigger) Matches(event pubsub.Event) bool {
+func (t *Trigger) Matches(event types.Event) bool {
 	split := strings.Split(t.Event, ".")
 	if len(split) != 2 {
 		return false

@@ -3,16 +3,16 @@ package engine
 import (
 	"context"
 	"go.uber.org/zap"
-	"home_automation_server/engine/pubsub"
+	"home_automation_server/engine/types"
 	"time"
 )
 
 type EventPipeline struct {
-	Source     EventSource
-	Translator EventTranslator
-	Aggregator EventAggregator
-	PubSub     *pubsub.PubSub
-	Logger     *zap.Logger
+	Source       EventSource
+	Translator   EventTranslator
+	Aggregator   EventAggregator
+	EventChannel chan types.Event
+	Logger       *zap.Logger
 }
 
 func (e *Engine) RunEventPipelines(ctx context.Context) {
@@ -45,7 +45,7 @@ func (p *EventPipeline) run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			if event := p.Aggregator.Flush(); event != nil {
-				p.PubSub.Publish(*event)
+				p.EventChannel <- *event
 			}
 			return ctx.Err()
 		case raw := <-rawCh:
@@ -54,15 +54,15 @@ func (p *EventPipeline) run(ctx context.Context) error {
 				continue
 			}
 			for _, e := range events {
-				// some events might be buffered by the eventaggregator
+				// some events might be buffered by the eventAggregator
 				// if event is passed through we publish now
 				if event := p.Aggregator.Aggregate(e); event != nil {
-					p.PubSub.Publish(e)
+					p.EventChannel <- *event
 				}
 			}
 		case <-ticker.C:
-			if out := p.Aggregator.Flush(); out != nil {
-				p.PubSub.Publish(*out)
+			if event := p.Aggregator.Flush(); event != nil {
+				p.EventChannel <- *event
 			}
 		}
 	}
@@ -70,10 +70,10 @@ func (p *EventPipeline) run(ctx context.Context) error {
 
 func (e *Engine) constructEventPipeline(label string, i *Integration) EventPipeline {
 	return EventPipeline{
-		Source:     i.EventSource,
-		Translator: i.Translator,
-		Aggregator: i.Aggregator,
-		PubSub:     e.PS,
-		Logger:     e.Logger.With(zap.String("integration", label)),
+		Source:       i.EventSource,
+		Translator:   i.Translator,
+		Aggregator:   i.Aggregator,
+		EventChannel: e.EventChannel,
+		Logger:       e.Logger.With(zap.String("integration", label)),
 	}
 }

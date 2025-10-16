@@ -1,4 +1,4 @@
-package pubsub
+package types
 
 import (
 	"fmt"
@@ -6,12 +6,18 @@ import (
 )
 
 type Event struct {
+	Id          string
 	Source      string // "hue", "halo"
 	Type        string // "light", "grouped_light", "wheel", "button_press"
 	Entity      string // human-readable ID ("flower_pot", "stue")
 	StateChange string
 	Payload     map[string]any // extra details (brightness=42, scene="movie")
 	Time        time.Time
+}
+
+type ProcessedEvent struct {
+	Event          Event
+	TriggeredRules []string
 }
 
 func (e *Event) BooleanPayload(key string) (bool, error) {

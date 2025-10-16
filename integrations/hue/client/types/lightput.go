@@ -1,7 +1,7 @@
 package types
 
 type LightPut struct {
-	Type                  string                    `json:"type"` // always "light"
+	Type                  string                    `json:"type,omitempty"`
 	Metadata              *MetadataPut              `json:"metadata,omitempty"`
 	Identify              *IdentifyPut              `json:"identify,omitempty"`
 	On                    *OnPut                    `json:"on,omitempty"`
