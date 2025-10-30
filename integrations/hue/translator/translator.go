@@ -4,195 +4,251 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
-	enginetypes "home_automation_server/engine/types"
 	"home_automation_server/integrations/hue/client"
 	"home_automation_server/integrations/hue/translator/events"
-	"home_automation_server/integrations/types"
+	"home_automation_server/types"
+	"home_automation_server/utils"
 	"time"
 )
 
 // Translator translates a parsed hue types into a pubsub.Event
 type Translator struct {
-	Client      *client.Client
-	EventParser EventParser
-	Logger      *zap.Logger
+	Client         *client.ApiClient
+	EventParser    EventParser
+	logger         *zap.Logger
+	stateStore     types.StateStore
+	entityRegistry types.EntityRegistry
 }
 
 // New is the constructor for Translator
-func New(client *client.Client, logger *zap.Logger) (*Translator, error) {
+func New(client *client.ApiClient, stateStore types.StateStore, entityRegistry types.EntityRegistry, logger *zap.Logger) (*Translator, error) {
 	t := &Translator{
-		Client:      client,
-		EventParser: newEventParser(logger),
-		Logger:      logger,
+		Client:         client,
+		EventParser:    newEventParser(logger),
+		logger:         logger,
+		stateStore:     stateStore,
+		entityRegistry: entityRegistry,
 	}
 
-	if err := t.init(); err != nil {
-		return nil, fmt.Errorf("failed to init translator: %w", err)
-	}
-
+	t.init()
 	return t, nil
 }
 
-// TODO: implement continuous refreshing of the registry to keep it aligned with the bridge state.
-// maybe events are published on state changes otherwise we refresh on some interval
-func (t *Translator) init() error {
+func (t *Translator) init() {
 	t.LoadEvents()
-
-	return nil
 }
 
-func (t *Translator) Translate(raw []byte) ([]enginetypes.Event, error) {
+func (t *Translator) Translate(raw []byte) ([]types.Event, error) {
 	eventBatch, err := t.EventParser.parse(raw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse events: %w", err)
 	}
 
 	// TODO: if switch cases grow beyond what is reasonable we could implement a map of types type to translator-func
-	translatedEvents := []enginetypes.Event{}
+	translatedEvents := []types.Event{}
 	for _, e := range eventBatch.Events {
-		switch e.GetType() {
-		case "light":
-			// a light event might contain multiple changes, a separate event is emitted for each change.
-			translated, err := t.translateLightUpdate(e, eventBatch.TimeStamp)
-			if err != nil {
-				t.Logger.Error("failed to translate light update", zap.Error(err))
-				continue
-			}
-			translatedEvents = append(translatedEvents, translated...)
+		var translated *types.Event
 
-		case "grouped_light":
-			// a grouped_light event might contain multiple changes, a separate event is emitted for each change.
-			translated, err := t.translateGroupedLightUpdate(e, eventBatch.TimeStamp)
-			if err != nil {
-				continue
-			}
-			translatedEvents = append(translatedEvents, translated...)
-
-		case "scene":
-			translated, err := t.translateSceneUpdate(e, eventBatch.TimeStamp)
-			if err != nil {
-				continue
-			}
-			translatedEvents = append(translatedEvents, translated)
-
-		default:
-			t.Logger.Debug("unknown types", zap.String("type", e.GetType()))
+		// The event context
+		context := &types.Context{
+			ID: uuid.NewString(),
 		}
 
+		switch e.GetType() {
+		case "light":
+			translated, err = t.translateLightUpdate(e, eventBatch.TimeStamp, context)
+			if err != nil {
+				t.logger.Error("failed to translate light update", zap.Error(err))
+				continue
+			}
+		case "grouped_light":
+			translated, err = t.translateGroupedLightUpdate(e, eventBatch.TimeStamp, context)
+			if err != nil {
+				t.logger.Error("failed to translate grouped_light update", zap.Error(err))
+				continue
+			}
+		case "scene":
+			translated, err = t.translateSceneUpdate(e, eventBatch.TimeStamp, context)
+			if err != nil {
+				t.logger.Error("failed to translate scene update", zap.Error(err))
+				continue
+			}
+		default:
+			t.logger.Info("unknown event_type", zap.String("type", e.GetType()))
+		}
+
+		// An event might be a no-op in that case the specialized translator func will return nil
+		if translated != nil {
+			translatedEvents = append(translatedEvents, *translated)
+		}
 	}
+
 	return translatedEvents, nil
 }
 
-func (t *Translator) translateSceneUpdate(e types.SourceEvent, ts time.Time) (enginetypes.Event, error) {
+func (t *Translator) translateSceneUpdate(e types.ExternalEvent, ts time.Time, context *types.Context) (*types.Event, error) {
 	sceneUpdate, ok := e.(*events.SceneUpdate)
 	if !ok {
-		t.Logger.Error("failed to type assert on sceneUpdate", zap.Any("types", e))
-		return enginetypes.Event{}, fmt.Errorf("expected a *SceneUpdate for types type 'scene'")
+		return nil, fmt.Errorf("expected a *SceneUpdate for event type 'scene'")
 	}
 
-	active := sceneUpdate.SafeActive()
-	if active == nil {
-		t.Logger.Error("no status.active for scene update", zap.Any("scene_update", sceneUpdate))
-		return enginetypes.Event{}, fmt.Errorf("no status.active for scene update")
-	}
-
-	humanID, ok := t.Client.ResourceRegistry.ResolveName(sceneUpdate.Type, sceneUpdate.ID)
+	entityID, ok := t.entityRegistry.Resolve(sceneUpdate.ID)
 	if !ok {
-		t.Logger.Error("failed to lookup name", zap.String("type", sceneUpdate.Type), zap.String("id", sceneUpdate.ID))
+		return nil, fmt.Errorf("failed to resolve entityID for scene with id: %s", sceneUpdate.ID)
+	}
+	oldState, err := t.getOldState(entityID)
+	if err != nil {
+		return nil, err
+	}
+	newState := utils.DeepCopyState(&oldState)
+	newState.Context = context
+
+	sceneStatus := sceneUpdate.SafeStatus()
+	if sceneStatus == nil {
+		t.logger.Debug("Ignoring SceneUpdate with no status field", zap.String("id", sceneUpdate.ID))
+		return nil, nil
 	}
 
-	group, ok := t.Client.ResourceRegistry.ResolveGroupForScene(sceneUpdate.ID)
-	if !ok {
-		t.Logger.Error("failed to lookup group", zap.String("type", sceneUpdate.Type), zap.String("id", sceneUpdate.ID))
-	}
+	newState.State = sceneStatus.Active
+	newState.Attributes["last_recall"] = sceneStatus.LastRecall
 
-	return enginetypes.Event{
-		Id:          uuid.NewString(),
-		Source:      "hue",
-		Type:        "scene",
-		Entity:      humanID,
-		StateChange: "active_status",
-		Payload: map[string]any{
-			"active": active,
-			"group":  group,
+	return &types.Event{
+		Type: types.EventTypeStateChanged,
+		Data: types.StateChangedData{
+			EntityID: entityID,
+			OldState: &oldState,
+			NewState: &newState,
 		},
-		Time: ts,
+		Context:   context,
+		TimeFired: time.Now(),
 	}, nil
 }
 
-func (t *Translator) translateLightUpdate(e types.SourceEvent, ts time.Time) ([]enginetypes.Event, error) {
-	lightEvent, ok := e.(*events.LightUpdate)
+func (t *Translator) translateLightUpdate(e types.ExternalEvent, ts time.Time, context *types.Context) (*types.Event, error) {
+	lightUpdate, ok := e.(*events.LightUpdate)
 	if !ok {
-		return []enginetypes.Event{}, fmt.Errorf("expected a *LightUpdate for types type 'light'")
+		return nil, fmt.Errorf("expected a *LightUpdate for types type 'light'")
 	}
 
-	humanID, ok := t.Client.ResourceRegistry.ResolveName(lightEvent.Type, lightEvent.ID)
-	if !ok {
-		t.Logger.Warn("failed to lookup name", zap.String("type", lightEvent.Type), zap.String("id", lightEvent.ID))
-		return []enginetypes.Event{}, fmt.Errorf("failed to lookup name")
+	on := lightUpdate.SafeOn()
+	brightness := lightUpdate.SafeBrightness()
+	colorXY := lightUpdate.SafeColorXY()
+	mirek := lightUpdate.SafeMirek()
+
+	// If no tracked fields changed, skip emitting an event
+	if on == nil && brightness == nil && colorXY == nil && mirek == nil {
+		t.logger.Debug("Ignoring LightUpdate with no tracked changes", zap.String("light_name", *lightUpdate.Metadata.Name))
+		return nil, nil
 	}
 
-	psEvents := []enginetypes.Event{}
-	// a light event might contain multiple changes, a separate event is emitted for each change.
-	for _, change := range lightEvent.ResolveStateChanges() {
-		event := enginetypes.Event{
-			Id:          uuid.NewString(),
-			Source:      "hue",
-			Type:        "light",
-			Entity:      humanID,
-			StateChange: change,
-			Payload: map[string]interface{}{
-				"brightness":     lightEvent.SafeBrightness(),
-				"on":             lightEvent.SafeOn(),
-				"mirek":          lightEvent.SafeMirek(),
-				"color_xy":       lightEvent.SafeColorXY(),
-				"effect":         lightEvent.SafeEffect(),
-				"alert":          lightEvent.SafeAlert(),
-				"dynamics_speed": lightEvent.SafeDynamicsSpeed(),
-				"gradient_mode":  lightEvent.SafeGradientMode(),
-			},
-			Time: ts,
-		}
-		psEvents = append(psEvents, event)
+	entityID, ok := t.entityRegistry.Resolve(lightUpdate.ID)
+	if !ok {
+		return nil, fmt.Errorf("failed to resolve entityID for %s", lightUpdate.Metadata.Name)
 	}
-	return psEvents, nil
+
+	oldState, err := t.getOldState(entityID)
+	if err != nil {
+		return nil, err
+	}
+	newState := utils.DeepCopyState(&oldState)
+	newState.Context = context
+
+	if on != nil {
+		newState.State = *on
+	}
+	if newState.Attributes == nil {
+		newState.Attributes = make(map[string]any)
+	}
+	if brightness != nil {
+		newState.Attributes["brightness"] = *brightness
+	}
+	if colorXY != nil {
+		newState.Attributes["color_xy"] = *colorXY
+	}
+	if mirek != nil {
+		newState.Attributes["mirek"] = *mirek
+	}
+
+	return &types.Event{
+		Type: types.EventTypeStateChanged,
+		Data: types.StateChangedData{
+			EntityID: entityID,
+			OldState: &oldState,
+			NewState: &newState,
+		},
+		Context:   context,
+		TimeFired: ts,
+	}, nil
 }
 
-func (t *Translator) translateGroupedLightUpdate(e types.SourceEvent, ts time.Time) ([]enginetypes.Event, error) {
+func (t *Translator) translateGroupedLightUpdate(e types.ExternalEvent, ts time.Time, context *types.Context) (*types.Event, error) {
 	groupedLightEvent, ok := e.(*events.GroupedLightUpdate)
 	if !ok {
-		return []enginetypes.Event{}, fmt.Errorf("expected a *GroupedLightUpdate for types type 'grouped_light'")
+		return nil, fmt.Errorf("expected a *GroupedLightUpdate for types type 'grouped_light'")
 	}
 
-	humanID, ok := t.Client.ResourceRegistry.ResolveName(groupedLightEvent.Type, groupedLightEvent.ID)
+	on := groupedLightEvent.SafeOn()
+	brightness := groupedLightEvent.SafeBrightness()
+	colorXY := groupedLightEvent.SafeColorXY()
+	mirek := groupedLightEvent.SafeMirek()
+
+	// If no tracked fields changed, skip emitting an event
+	if on == nil && brightness == nil && colorXY == nil && mirek == nil {
+		t.logger.Debug("Ignoring GroupedLightUpdate with no tracked changes", zap.String("id", groupedLightEvent.ID))
+		return nil, nil
+	}
+
+	entityID, ok := t.entityRegistry.Resolve(groupedLightEvent.ID)
 	if !ok {
-		return []enginetypes.Event{}, fmt.Errorf("failed to lookup name")
+		t.logger.Info("skipping grouped_light update with no underlying entity in the registry")
+		return nil, nil
 	}
 
-	translated := []enginetypes.Event{}
-	// a grouped_light types might contain multiple changes, a separate types is emitted for each change.
-	for _, change := range groupedLightEvent.ResolveStateChanges() {
-		event := enginetypes.Event{
-			Id:          uuid.NewString(),
-			Source:      "hue",
-			Type:        "grouped_light",
-			Entity:      humanID,
-			StateChange: change,
-			Payload: map[string]interface{}{
-				"brightness":     groupedLightEvent.SafeBrightness(),
-				"on":             groupedLightEvent.SafeOn(),
-				"mirek":          groupedLightEvent.SafeMirek(),
-				"color_xy":       groupedLightEvent.SafeColorXY(),
-				"effect":         groupedLightEvent.SafeEffect(),
-				"alert":          groupedLightEvent.SafeAlert(),
-				"dynamics_speed": groupedLightEvent.SafeDynamicsSpeed(),
-				"gradient_mode":  groupedLightEvent.SafeGradientMode(),
-			},
-			Time: ts,
-		}
-		translated = append(translated, event)
+	oldState, err := t.getOldState(entityID)
+	if err != nil {
+		return nil, err
 	}
-	return translated, nil
+
+	newState := utils.DeepCopyState(&oldState)
+	newState.Context = context
+
+	if on != nil {
+		newState.State = *on
+	}
+	if newState.Attributes == nil {
+		newState.Attributes = make(map[string]any)
+	}
+	if brightness != nil {
+		newState.Attributes["brightness"] = *brightness
+	}
+	if colorXY != nil {
+		newState.Attributes["color_xy"] = *colorXY
+	}
+	if mirek != nil {
+		newState.Attributes["mirek"] = *mirek
+	}
+
+	return &types.Event{
+		Type: types.EventTypeStateChanged,
+		Data: types.StateChangedData{
+			EntityID: entityID,
+			OldState: &oldState,
+			NewState: &newState,
+		},
+		Context:   context,
+		TimeFired: ts,
+	}, nil
+}
+
+func (t *Translator) getOldState(entityID string) (types.State, error) {
+	oldState, ok := t.stateStore.Get(entityID)
+	if !ok {
+		t.logger.Info("failed to fetch old state", zap.String("entity_id", entityID))
+		return types.State{
+			EntityID: entityID,
+		}, nil
+	}
+	return oldState, nil
 }
 
 func (t *Translator) LoadEvents() {
@@ -211,8 +267,4 @@ func (t *Translator) EventTypes() []string {
 
 func (t *Translator) EntitiesForType(typ string) []string {
 	return t.Client.ResourceRegistry.EntityNamesForType(typ)
-}
-
-func (t *Translator) StateChangesForType(typ string) []string {
-	return t.EventParser.EventRegistry[typ].StateChanges
 }

@@ -1,11 +1,13 @@
+"use server";
+
 import { NextResponse } from "next/server";
 
 export async function GET(
   req: Request,
-  context: { params: { source: string } }
+  { params }: { params: Promise<{ source: string }> }
 ) {
   try {
-    const { source } = context.params;
+    const { source } = await params;
 
     const response = await fetch(
       `http://localhost:8080/api/integrations/${source}/event-types`,

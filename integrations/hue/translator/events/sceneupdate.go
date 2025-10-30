@@ -19,9 +19,9 @@ type SceneUpdate struct {
 	Status *SceneStatus `json:"status,omitempty"`
 }
 
-func (s *SceneUpdate) SafeActive() *string {
+func (s *SceneUpdate) SafeStatus() *SceneStatus {
 	if s.Status != nil {
-		return &s.Status.Active
+		return s.Status
 	}
 	return nil
 }

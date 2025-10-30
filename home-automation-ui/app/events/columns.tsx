@@ -1,178 +1,138 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { Event } from "@/app/api/events/route"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { ChevronDown } from "lucide-react"
+import { Event } from "@/types/events"
+import { Badge } from "@/components/ui/badge"
+import { ENTITY_ICON_MAP, ENTITY_STATE_KEY_MAP } from "@/lib/entity-display-map"
 
-type MultiSelectFilterProps<T extends string | number> = {
-  column: any
-  table: any
-  valueType?: "string" | "number" // optional, defaults to string
+// helper to format timestamps
+function formatTime(iso: string) {
+  const date = new Date(iso)
+  return date.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
 }
 
-function MultiSelectFilter<T extends string | number>({
-  column,
-  table,
-  valueType = "string",
-}: MultiSelectFilterProps<T>) {
-  // Extract unique values
-  const uniqueValues = Array.from(
-    new Set(
-      table.getPreFilteredRowModel().rows.map((row: any) => {
-        const value = row.getValue(column.id)
+// helper for event summary of state_changed events
+function summarizeStateChanged(event: Event) {
+  const d = event.data as any
+  if (!d) return "Unknown state change"
 
-        // If valueType is number AND value is an array, use its length
-        const numericValue =
-          valueType === "number"
-            ? Array.isArray(value)
-              ? value.length
-              : Number(value)
-            : String(value)
+  const entityId = d.entity_id || d.new_state?.entity_id
+  const oldState = d.old_state
+  const newState = d.new_state
+  if (!entityId || !newState) return "Incomplete state data"
 
-        return numericValue
-      })
-    )
-  ).filter(v => v !== "" && v != null) as T[]
+  const oldMain = oldState?.state
+  const newMain = newState?.state
 
-  const selectedValues = (column.getFilterValue() as T[]) ?? []
+  const entityType = entityId.split(".")[0]
+  const map = ENTITY_STATE_KEY_MAP[entityType]
 
-  const toggleValue = (value: T, checked: boolean) => {
-    const newValues = checked
-      ? [...selectedValues, value]
-      : selectedValues.filter(v => v !== value)
+  // Case 1: main state changed
+  if (oldMain !== newMain) {
+    let readableOld = oldMain
+    let readableNew = newMain
 
-    column.setFilterValue(newValues.length ? newValues : undefined)
+    if (typeof newMain === "boolean" && map) {
+      readableOld = oldMain ? map.trueLabel : map.falseLabel
+      readableNew = newMain ? map.trueLabel : map.falseLabel
+    }
+
+    return `${entityId}: ${readableOld ?? "?"} → ${readableNew ?? "?"}`
   }
 
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="p-1 text-xs">
-          <ChevronDown className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-48">
-        <div className="flex flex-col space-y-1 max-h-64 overflow-auto">
-          {uniqueValues.map(value => (
-            <label key={value} className="flex items-center space-x-2">
-              <Checkbox
-                checked={selectedValues.includes(value)}
-                onCheckedChange={checked => toggleValue(value, !!checked)}
-              />
-              <span>{value}</span>
-            </label>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
+  // Case 2: main state same → detect changed attribute(s)
+  const oldAttrs = oldState?.attributes || {}
+  const newAttrs = newState?.attributes || {}
+
+  const diffs: string[] = []
+  for (const [key, newVal] of Object.entries(newAttrs)) {
+    const oldVal = oldAttrs[key]
+    if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+      diffs.push(`${key} ${oldVal ?? "?"} → ${newVal ?? "?"}`)
+    }
+  }
+
+  if (diffs.length === 0) return `${entityId}: updated (no visible change)`
+  if (diffs.length === 1) return `${entityId}: ${diffs[0]}`
+
+  const preview = diffs.slice(0, 2).join(", ")
+  return `${entityId}: ${preview}${diffs.length > 2 ? "…" : ""}`
 }
 
+// helper to create a human-readable summary
+function renderSummary(event: Event) {
+  switch (event.type) {
+    case "state_changed": {
+      const summary = summarizeStateChanged(event)
+      return (
+        <div className="flex flex-col">
+          <div className="flex items-center space-x-2">
+            <Badge variant="outline" className="text-xs">state_changed</Badge>
+            <span className="font-medium truncate">{summary}</span>
+          </div>
+        </div>
+      )
+    }
+
+    case "call_service": {
+      const d = event.data as any
+      const domain = d?.domain
+      const service = d?.service
+      const entity = d?.entity_id
+      return (
+        <div className="flex flex-col">
+          <div className="flex items-center space-x-2">
+            <Badge variant="outline" className="text-xs">call_service</Badge>
+            <span className="font-medium truncate">{`${domain}.${service}`}</span>
+          </div>
+          {entity && (
+            <span className="text-muted-foreground text-xs truncate">
+              Target: {entity}
+            </span>
+          )}
+        </div>
+      )
+    }
+
+    case "time_changed": {
+      return (
+        <div className="flex items-center space-x-2">
+          <Badge variant="outline" className="text-xs">time_changed</Badge>
+          <span className="text-muted-foreground text-xs">Clock tick</span>
+        </div>
+      )
+    }
+
+    default:
+      return (
+        <div className="flex items-center space-x-2">
+          <Badge variant="secondary" className="text-xs">{event.type}</Badge>
+          <span className="text-muted-foreground text-xs">Unrecognized event</span>
+        </div>
+      )
+  }
+}
 
 export const columns: ColumnDef<Event>[] = [
   {
-    accessorKey: "source",
-    header: ({ column, table }) => (
-      <div className="flex items-center space-x-1">
-        <span className="text-sm font-medium">Source</span>
-        <MultiSelectFilter column={column} table={table} />
-      </div>
-    ),
-    filterFn: (row, columnId, filterValues: string[]) => {
-      if (!filterValues || filterValues.length === 0) return true
-      return filterValues.includes(row.getValue(columnId))
-    },
-    cell: ({ row }) => <div>{row.getValue("source")}</div>,
-  },
-  {
-    accessorKey: "type",
-    header: ({ column, table }) => (
-      <div className="flex items-center space-x-1">
-        <span className="text-sm font-medium">Type</span>
-        <MultiSelectFilter column={column} table={table} />
-      </div>
-    ),
-    filterFn: (row, columnId, filterValues: string[]) => {
-      if (!filterValues || filterValues.length === 0) return true
-      return filterValues.includes(row.getValue(columnId))
-    },
-    cell: ({ row }) => (
-      <div className="text-sm text-muted-foreground">{row.getValue("type")}</div>
-    ),
-  },
-  {
-    accessorKey: "entity",
-    header: ({ column, table }) => (
-      <div className="flex items-center space-x-1">
-        <span className="text-sm font-medium">Entity</span>
-        <MultiSelectFilter column={column} table={table} />
-      </div>
-    ),
-    filterFn: (row, columnId, filterValues: string[]) => {
-      if (!filterValues || filterValues.length === 0) return true
-      return filterValues.includes(row.getValue(columnId))
-    },
-    cell: ({ row }) => (
-      <div className="text-sm text-muted-foreground">{row.getValue("entity")}</div>
-    ),
-  },
-  {
-    accessorKey: "stateChange",
-    header: ({ column, table }) => (
-      <div className="flex items-center space-x-1">
-        <span className="text-sm font-medium">State Change</span>
-        <MultiSelectFilter column={column} table={table} />
-      </div>
-    ),
-    filterFn: (row, columnId, filterValues: string[]) => {
-      if (!filterValues || filterValues.length === 0) return true
-      return filterValues.includes(row.getValue(columnId))
-    },
-    cell: ({ row }) => (
-      <div className="text-sm text-muted-foreground">{row.getValue("stateChange")}</div>
-    ),
-  },
-  {
-    accessorKey: "timestamp",
+    accessorKey: "time_fired",
     header: "Time",
     cell: ({ row }) => {
-      const isoTime = row.getValue("timestamp") as string
-      const date = new Date(isoTime)
-      const formatted = date.toLocaleString("en-GB", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      })
-      return <div className="text-sm text-muted-foreground">{formatted}</div>
-    },
-  },
-  {
-    accessorKey: "triggeredRules",
-    header: ({ column, table }) => (
-      <div className="flex items-center space-x-1">
-        <span className="text-sm font-medium">Triggered Rules</span>
-        <MultiSelectFilter<number> column={column} table={table} valueType="number" />
-      </div>
-    ),
-    filterFn: (row, columnId, filterValues: number[]) => {
-      if (!filterValues || filterValues.length === 0) return true
-      const length = (row.getValue(columnId) as string[]).length
-      return filterValues.includes(length)
-    },
-    cell: ({ row }) => {
-      const rules = row.getValue("triggeredRules") as string[]
+      const iso = row.getValue("time_fired") as string
       return (
-        <div className="text-left text-sm text-muted-foreground">
-          {rules.length}
+        <div className="text-sm text-muted-foreground font-mono">
+          {formatTime(iso)}
         </div>
       )
     },
+  },
+  {
+    id: "summary",
+    header: "Event",
+    cell: ({ row }) => renderSummary(row.original),
   },
 ]

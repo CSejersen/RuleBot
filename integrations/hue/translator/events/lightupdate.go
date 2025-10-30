@@ -74,7 +74,7 @@ func (l *LightUpdate) ResolveStateChanges() []string {
 		changes = append(changes, "brightness")
 	}
 	if l.SafeOn() != nil {
-		changes = append(changes, "power_mode")
+		changes = append(changes, "on")
 	}
 	if l.SafeMirek() != nil {
 		changes = append(changes, "mirek")

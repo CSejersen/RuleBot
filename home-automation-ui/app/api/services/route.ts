@@ -1,21 +1,14 @@
+"use server";
+
 import { NextResponse } from "next/server";
-
-export interface ServiceParam {
-  DataType: string;
-  Description: string;
-}
-
-export interface ServiceData {
-  name: string;
-  required_params: Record<string, ServiceParam>;
-  requires_target_type: boolean;
-  requires_target_id: boolean;
-}
-
-export interface ServicesResponse {
-  services: ServiceData[];
-  error?: string;
-}
+import type {
+  ServiceParam,
+  TargetType,
+  EntityType,
+  TargetSpec,
+  ServiceSpec,
+  ServicesResponse,
+} from "@/types/services/services";
 
 export async function GET(req: Request) {
   try {

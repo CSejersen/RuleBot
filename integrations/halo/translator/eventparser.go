@@ -5,24 +5,24 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"home_automation_server/integrations/halo/translator/events"
-	"home_automation_server/integrations/types"
+	"home_automation_server/types"
 )
 
 // EventParser parses raw bytes into the correct types type
 type EventParser struct {
 	Logger        *zap.Logger
-	EventRegistry map[string]types.EventData
+	EventRegistry map[string]types.ExternalEventDescriptor
 }
 
 func newEventParser(logger *zap.Logger) EventParser {
 	return EventParser{
 		Logger:        logger,
-		EventRegistry: make(map[string]types.EventData),
+		EventRegistry: make(map[string]types.ExternalEventDescriptor),
 	}
 }
 
 // ParseEvent parses any types based on the eventRegistry
-func (p *EventParser) ParseEvent(b []byte) (types.SourceEvent, error) {
+func (p *EventParser) ParseEvent(b []byte) (types.ExternalEvent, error) {
 	var raw events.RawEvent
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return nil, err
@@ -47,6 +47,6 @@ func (p *EventParser) ParseEvent(b []byte) (types.SourceEvent, error) {
 }
 
 // RegisterEvent registers a constructor for a type string
-func (p *EventParser) RegisterEvent(eventType string, data types.EventData) {
+func (p *EventParser) RegisterEvent(eventType string, data types.ExternalEventDescriptor) {
 	p.EventRegistry[eventType] = data
 }

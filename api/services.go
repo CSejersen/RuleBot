@@ -2,15 +2,14 @@ package api
 
 import (
 	"encoding/json"
-	"home_automation_server/integrations/types"
+	"home_automation_server/integrations"
 	"net/http"
 )
 
 type ServiceResponse struct {
-	Name               string                         `json:"name"`
-	RequiredParams     map[string]types.ParamMetadata `json:"required_params"`
-	RequiresTargetType bool                           `json:"requires_target_type"`
-	RequiresTargetID   bool                           `json:"requires_target_id"`
+	Name           string                                `json:"name"`
+	RequiredParams map[string]integrations.ParamMetadata `json:"required_params"`
+	AllowedTargets integrations.TargetSpec               `json:"allowed_targets"`
 }
 
 func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
@@ -20,14 +19,14 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := []ServiceResponse{}
-	services := s.Engine.ServiceRegistry.GetAll()
-	for _, s := range services {
-		resp = append(resp, ServiceResponse{
-			Name:               s.FullName,
-			RequiredParams:     s.RequiredParams,
-			RequiresTargetType: s.RequiresTargetType,
-			RequiresTargetID:   s.RequiresTargetID,
-		})
+	serviceSpecs := s.Engine.ServiceRegistry.GetAll()
+	for name, spec := range serviceSpecs {
+		serviceResponse := ServiceResponse{
+			Name:           name,
+			RequiredParams: spec.RequiredParams,
+			AllowedTargets: spec.AllowedTargets,
+		}
+		resp = append(resp, serviceResponse)
 	}
 	json.NewEncoder(w).Encode(map[string]any{"services": resp})
 }

@@ -1,42 +1,19 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-
-import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
+import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, useReactTable } from "@tanstack/react-table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { useState } from "react"
+import { Event } from "@/types/events"
+import { EventDetails } from "./event-details"
 
-interface DataTableProps<TData, TValue> {
+interface DataTableProps<TData extends Event, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
 }
 
-export function DataTable<TData extends Record<string, any>, TValue>({
-  columns,
-  data,
-}: DataTableProps<TData, TValue>) {
+export function DataTable<TData extends Event, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
   const [columnFilters, setColumnFilters] = useState<any[]>([])
   const [selectedEvent, setSelectedEvent] = useState<TData | null>(null)
   const [isOpen, setIsOpen] = useState(false)
@@ -54,16 +31,15 @@ export function DataTable<TData extends Record<string, any>, TValue>({
 
   return (
     <div>
+      {/* Table */}
       <div className="overflow-hidden rounded-md border">
         <Table>
           <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
+            {table.getHeaderGroups().map(headerGroup => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
+                {headerGroup.headers.map(header => (
                   <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
+                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 ))}
               </TableRow>
@@ -71,7 +47,7 @@ export function DataTable<TData extends Record<string, any>, TValue>({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map(row => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
@@ -81,7 +57,7 @@ export function DataTable<TData extends Record<string, any>, TValue>({
                     setIsOpen(true)
                   }}
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getVisibleCells().map(cell => (
                     <TableCell key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
@@ -99,16 +75,17 @@ export function DataTable<TData extends Record<string, any>, TValue>({
         </Table>
       </div>
 
-      <div className="flex items-center justify-between">
+      {/* Pagination & Reset Filters */}
+      <div className="flex items-center justify-between mt-4">
         <Button
           variant="outline"
           size="sm"
           onClick={() => setColumnFilters([])}
-          disabled={columnFilters.length === 0} // optional: gray out if no filters
+          disabled={columnFilters.length === 0}
         >
           Reset Filters
         </Button>
-        <div className="flex items-center justify-end space-x-2 py-4">
+        <div className="flex items-center space-x-2">
           <Button
             variant="outline"
             size="sm"
@@ -131,47 +108,18 @@ export function DataTable<TData extends Record<string, any>, TValue>({
         </div>
       </div>
 
-
       {/* Event Detail Dialog */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Event Details</DialogTitle>
             <DialogDescription>
-              {selectedEvent
-                ? `Information for event with ID: ${selectedEvent.id}`
-                : "Information about the selected event."}
+              {selectedEvent ? `Details for event ID: ${selectedEvent.id}` : "Select an event to view details"}
             </DialogDescription>
           </DialogHeader>
 
           {selectedEvent ? (
-            <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-2">
-                <p><strong>Source:</strong> {selectedEvent.source}</p>
-                <p><strong>Type:</strong> {selectedEvent.type}</p>
-                <p><strong>Entity:</strong> {selectedEvent.entity}</p>
-                <p><strong>State Change:</strong> {selectedEvent.stateChange}</p>
-                <p><strong>Timestamp:</strong> {selectedEvent.timestamp ?? "—"}</p>
-              </div>
-
-              {selectedEvent.triggeredRules.length > 0 && (
-                <div className="space-y-1">
-                  <p className="font-semibold mb-1">Rules Triggered:</p>
-                  {selectedEvent.triggeredRules.map((rule: string, index: number) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {rule}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
-              <div>
-                <p className="font-semibold mb-1">Payload:</p>
-                <pre className="bg-muted p-3 rounded-md overflow-auto text-xs max-h-60">
-                  {JSON.stringify(selectedEvent.payload, null, 2)}
-                </pre>
-              </div>
-            </div>
+            <EventDetails event={selectedEvent} />
           ) : (
             <p>No event selected.</p>
           )}

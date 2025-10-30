@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"go.uber.org/zap"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 	"home_automation_server/engine"
 	"home_automation_server/integrations/bangandolufsen"
 	"home_automation_server/integrations/halo"
@@ -18,7 +21,19 @@ func setupContext() (context.Context, context.CancelFunc) {
 }
 
 func setupEngine(ctx context.Context, logger *zap.Logger, nWorkers int) (*engine.Engine, error) {
-	e, err := engine.New(ctx, logger.Named("engine"), nWorkers)
+	dsn := os.Getenv("MYSQL_DSN")
+	if dsn == "" {
+		return nil, fmt.Errorf("MYSQL_DSN environment variable not set")
+	}
+
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		PrepareStmt: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	e, err := engine.New(ctx, db, logger.Named("engine"), nWorkers)
 	if err != nil {
 		return nil, err
 	}
@@ -47,31 +62,31 @@ func setupLogger() *zap.Logger {
 	return logger
 }
 
-func registerIntegrations(ctx context.Context, e *engine.Engine, logger *zap.Logger) {
-	// Hue
-	hueIntegration, err := hue.NewIntegration(logger)
-	if err != nil {
-		logger.Fatal("failed to init Hue integration", zap.Error(err))
-	}
-	e.RegisterIntegration(hueIntegration)
+func registerIntegrationDescriptors(e *engine.Engine) {
+	reg := e.IntegrationDescRegistry
+	reg.Register(hue.Descriptor())
+	reg.Register(halo.Descriptor())
+	reg.Register(bangandolufsen.Descriptor())
 
-	//Halo
-	haloIntegration, err := halo.NewIntegration(ctx, logger)
-	if err != nil {
-		logger.Fatal("failed to init Halo integration", zap.Error(err))
-	}
-	e.RegisterIntegration(haloIntegration)
+	e.Logger.Info("Integration descriptors registered successfully", zap.Int("num_descriptors", len(reg.List())))
+}
 
-	// Bang and Olufsen
-	bangOlufsenIntegration, err := bangandolufsen.NewIntegration(ctx, logger)
+func LoadIntegrations(ctx context.Context, e *engine.Engine) error {
+	integrationCfgs, err := e.IntegrationCfgStore.LoadAll(ctx)
 	if err != nil {
-		logger.Fatal("failed to init Bang and Olufsen integration", zap.Error(err))
+		return fmt.Errorf("unable to load integration configurations: %w", err)
 	}
-	e.RegisterIntegration(bangOlufsenIntegration)
-	e.Logger.Debug("All integrations registered successfully", zap.Any("all_services", e.ServiceRegistry.GetAll()))
+	for _, cfg := range integrationCfgs {
+		err := e.LoadIntegration(ctx, cfg.IntegrationName)
+		if err != nil {
+			return fmt.Errorf("unable to load integration %s: %w", cfg.IntegrationName, err)
+		}
+	}
+
+	e.Logger.Info("Successfully loaded integration", zap.Int("num_active_integrations", len(integrationCfgs)))
+	return nil
 }
 
 func runEngine(e *engine.Engine, logger *zap.Logger, ctx context.Context) {
-	e.RunEventPipelines(ctx)
 	e.ProcessEvents(ctx)
 }

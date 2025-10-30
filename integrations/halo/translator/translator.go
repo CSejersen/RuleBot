@@ -2,23 +2,28 @@ package translator
 
 import (
 	"errors"
+	"fmt"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
-	enginetypes "home_automation_server/engine/types"
 	"home_automation_server/integrations/halo/client"
 	"home_automation_server/integrations/halo/translator/events"
-	"home_automation_server/integrations/types"
+	"home_automation_server/types"
+	"home_automation_server/utils"
 	"time"
 )
 
-const wheelBufferDuration = 300 * time.Millisecond
+const (
+	wheelBufferDuration       = 300 * time.Millisecond
+	ButtonAttributePressState = "press_state"
+)
 
 type Translator struct {
 	Client      *client.Client
 	EventParser EventParser
 	Logger      *zap.Logger
 
-	// Registry: ID -> Human-readable name
-	Registry map[string]string
+	StateStore     types.StateStore
+	EntityRegistry types.EntityRegistry
 
 	wheelBuf wheelBuffer
 }
@@ -28,11 +33,13 @@ type wheelBuffer struct {
 	lastFlush time.Time
 }
 
-func New(client *client.Client, logger *zap.Logger) *Translator {
+func New(client *client.Client, stateStore types.StateStore, entityRegistry types.EntityRegistry, logger *zap.Logger) *Translator {
 	t := &Translator{
-		Client:      client,
-		EventParser: newEventParser(logger),
-		Logger:      logger,
+		Client:         client,
+		EventParser:    newEventParser(logger),
+		Logger:         logger,
+		StateStore:     stateStore,
+		EntityRegistry: entityRegistry,
 	}
 	t.init()
 	return t
@@ -40,16 +47,9 @@ func New(client *client.Client, logger *zap.Logger) *Translator {
 
 func (t *Translator) init() {
 	t.LoadEvents() // load all events registered in events/registry
-
-	// init registry of human-readable id's
-	t.Registry = make(map[string]string)
-	buttons := t.Client.Buttons()
-	for _, b := range buttons {
-		t.Registry[b.ID] = b.Title
-	}
 }
 
-func (t *Translator) Translate(raw []byte) ([]enginetypes.Event, error) {
+func (t *Translator) Translate(raw []byte) ([]types.Event, error) {
 	event, err := t.EventParser.ParseEvent(raw)
 	if err != nil {
 		t.Logger.Error("failed to parse event", zap.Error(err))
@@ -62,89 +62,148 @@ func (t *Translator) Translate(raw []byte) ([]enginetypes.Event, error) {
 		translated, err := t.translateWheelEvent(event)
 		if err != nil {
 			t.Logger.Error("failed to translate wheel types", zap.Error(err))
-			return []enginetypes.Event{}, err
+			return []types.Event{}, err
 		}
-		return []enginetypes.Event{translated}, nil
+		return []types.Event{translated}, nil
 
 	case "button":
 		translated, err := t.translateButtonEvent(event)
 		if err != nil {
 			t.Logger.Error("failed to translate button types", zap.Error(err))
-			return []enginetypes.Event{}, err
+			return []types.Event{}, err
 		}
-		return []enginetypes.Event{translated}, nil
+		return []types.Event{translated}, nil
 
 	case "system":
 		translated, err := t.translateSystemEvent(event)
 		if err != nil {
 			t.Logger.Error("failed to translate system types", zap.Error(err))
-			return []enginetypes.Event{}, err
+			return []types.Event{}, err
 		}
-		return []enginetypes.Event{translated}, nil
+		return []types.Event{translated}, nil
 
 	default:
 		t.Logger.Info("translator not implemented, skipping types", zap.String("type", event.GetType()))
 	}
-	return []enginetypes.Event{}, nil
+	return []types.Event{}, nil
 }
 
-func (t *Translator) translateSystemEvent(e types.SourceEvent) (enginetypes.Event, error) {
+func (t *Translator) translateSystemEvent(e types.ExternalEvent) (types.Event, error) {
 	sysEvent, ok := e.(*events.SystemEvent)
 	if !ok {
-		return enginetypes.Event{}, nil
+		return types.Event{}, nil
 	}
 
-	return enginetypes.Event{
-		Source:      "halo",
-		Type:        "system",
-		StateChange: sysEvent.State,
-		Payload:     map[string]any{},
-		Time:        time.Now(),
+	entityID, ok := t.EntityRegistry.Resolve(t.Client.Config.ID)
+	if !ok {
+		t.Logger.Info("skipping translation of event with no registered underlying entity")
+	}
+
+	context := &types.Context{ID: uuid.NewString()}
+
+	oldState, ok := t.StateStore.Get(entityID)
+	if !ok {
+		t.Logger.Warn("failed to find old system_state in state store", zap.String("system_id", t.Client.Config.ID))
+	}
+	newState := oldState
+	newState.Context = context
+	newState.State = sysEvent.State
+
+	return types.Event{
+		Type: types.EventTypeStateChanged,
+		Data: types.StateChangedData{
+			EntityID: entityID,
+			OldState: &oldState,
+			NewState: &newState,
+		},
+		Context:   context,
+		TimeFired: time.Now(),
 	}, nil
 }
 
-func (t *Translator) translateWheelEvent(e types.SourceEvent) (enginetypes.Event, error) {
+func (t *Translator) translateWheelEvent(e types.ExternalEvent) (types.Event, error) {
 	wheelEvent, ok := e.(*events.WheelEvent)
 	if !ok {
-		return enginetypes.Event{}, errors.New("expected a *WheelEvent for types type 'wheel'")
+		return types.Event{}, errors.New("expected a *WheelEvent for types type 'wheel'")
 	}
 
-	humanID, ok := t.LookupName(wheelEvent.ID)
+	entityID, ok := t.EntityRegistry.Resolve(wheelEvent.ID)
 	if !ok {
-		t.Logger.Warn("failed to lookup human id", zap.String("id", wheelEvent.ID))
+		return types.Event{}, fmt.Errorf("failed to resolve wheel event with no registered underlying entity")
 	}
 
-	return enginetypes.Event{
-		Source:      "halo",
-		Type:        "wheel",
-		Entity:      humanID,
-		StateChange: ResolveWheelStateChange(wheelEvent.Counts),
-		Payload: map[string]any{
-			"step": wheelEvent.Counts,
+	var newValue float64
+	oldButtonState, ok := t.StateStore.Get(entityID)
+	if !ok {
+		t.Logger.Info("failed to get state for button")
+		oldButtonState = types.State{
+			EntityID: entityID,
+			State:    50.0,
+			Context:  nil,
+		}
+	}
+
+	oldValue, ok := utils.ToFloat64(oldButtonState.State)
+	if !ok {
+		return types.Event{}, fmt.Errorf("failed to cast button state to float64")
+	}
+	newValue = clamp(oldValue+float64(wheelEvent.Counts), 0, 100)
+
+	context := &types.Context{
+		ID: uuid.NewString(),
+	}
+
+	return types.Event{
+		Type: types.EventTypeStateChanged,
+		Data: types.StateChangedData{
+			EntityID: entityID,
+			OldState: &oldButtonState,
+			NewState: &types.State{
+				EntityID:    entityID,
+				State:       newValue,
+				Attributes:  oldButtonState.Attributes,
+				LastChanged: time.Now(),
+				LastUpdated: time.Now(),
+				Context:     context,
+			},
 		},
-		Time: time.Now(),
+		Context:   context,
+		TimeFired: time.Now(),
 	}, nil
 }
 
-func (t *Translator) translateButtonEvent(e types.SourceEvent) (enginetypes.Event, error) {
+func (t *Translator) translateButtonEvent(e types.ExternalEvent) (types.Event, error) {
 	buttonEvent, ok := e.(*events.ButtonEvent)
 	if !ok {
-		return enginetypes.Event{}, errors.New("expected a *ButtonEvent for types type 'button'")
+		return types.Event{}, errors.New("expected a *ButtonEvent for types type 'button'")
 	}
 
-	humanID, ok := t.LookupName(buttonEvent.ID)
+	oldState, ok := t.StateStore.Get(buttonEvent.ID)
 	if !ok {
-		t.Logger.Warn("failed to lookup human id", zap.String("id", buttonEvent.ID))
+		return types.Event{}, errors.New("failed to find old button state in state store")
 	}
 
-	return enginetypes.Event{
-		Source:      "halo",
-		Type:        "button",
-		Entity:      humanID,
-		StateChange: buttonEvent.State,
-		Payload:     nil,
-		Time:        time.Now(),
+	newAttributes := oldState.Attributes
+	newAttributes[ButtonAttributePressState] = buttonEvent.State
+
+	return types.Event{
+		Type: types.EventTypeStateChanged,
+		Data: types.StateChangedData{
+			EntityID: buttonEvent.ID,
+			OldState: &oldState,
+			NewState: &types.State{
+				EntityID:    buttonEvent.ID,
+				State:       oldState.State, // button.value (0-100)
+				Attributes:  newAttributes,
+				LastChanged: time.Time{},
+				LastUpdated: time.Time{},
+				Context:     nil,
+			},
+		},
+		Context:   nil,
+		TimeFired: time.Time{},
 	}, nil
+
 }
 
 func ResolveWheelStateChange(count int) string {
@@ -152,13 +211,6 @@ func ResolveWheelStateChange(count int) string {
 		return "clockwise"
 	}
 	return "counter_clockwise"
-}
-
-func (t *Translator) LookupName(id string) (string, bool) {
-	if name, ok := t.Registry[id]; ok {
-		return name, true
-	}
-	return "", false
 }
 
 func (t *Translator) LoadEvents() {
@@ -182,6 +234,12 @@ func (t *Translator) EntitiesForType(typ string) []string {
 	return t.Client.ButtonNames()
 }
 
-func (t *Translator) StateChangesForType(typ string) []string {
-	return t.EventParser.EventRegistry[typ].StateChanges
+func clamp(v, min, max float64) float64 {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
 }

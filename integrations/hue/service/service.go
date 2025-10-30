@@ -2,25 +2,26 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"go.uber.org/zap"
-	"home_automation_server/engine/rules"
+	"home_automation_server/automation"
+	"home_automation_server/integrations"
 	"home_automation_server/integrations/hue/client"
-	"home_automation_server/integrations/types"
+	"home_automation_server/types"
 	"math"
 )
 
 type Service struct {
-	Client *client.Client
+	Client *client.ApiClient
 	Logger *zap.Logger
 }
 
-func (s *Service) ExportServices() map[string]types.ServiceData {
-	return map[string]types.ServiceData{
+func (s *Service) ExportServices() map[string]integrations.ServiceSpec {
+	return map[string]integrations.ServiceSpec{
 		"step_brightness": {
-			FullName: "hue.step_brightness",
-			Handler:  s.StepBrightness,
-			RequiredParams: map[string]types.ParamMetadata{
+			Handler: s.StepBrightness,
+			RequiredParams: map[string]integrations.ParamMetadata{
 				"direction": {
 					DataType:    "string",
 					Description: "One of: up, down",
@@ -30,30 +31,23 @@ func (s *Service) ExportServices() map[string]types.ServiceData {
 					Description: "Maximum 100, clips at Max-level or Min-level.",
 				},
 			},
-			RequiresTargetType: true,
-			RequiresTargetID:   true,
+			AllowedTargets: integrations.TargetSpec{
+				Type:        []integrations.TargetType{integrations.TargetTypeEntity},
+				EntityTypes: []types.EntityType{types.EntityTypeLight},
+			},
 		},
 		"toggle": {
-			FullName: "hue.toggle",
-			Handler:  s.Toggle,
-			RequiredParams: map[string]types.ParamMetadata{
-				"on": {
-					DataType:    "bool",
-					Description: "The current on_state (get from stateStore)",
-				},
+			Handler:        s.Toggle,
+			RequiredParams: map[string]integrations.ParamMetadata{},
+			AllowedTargets: integrations.TargetSpec{
+				Type:        []integrations.TargetType{integrations.TargetTypeEntity},
+				EntityTypes: []types.EntityType{types.EntityTypeLight},
 			},
-			RequiresTargetType: true,
-			RequiresTargetID:   true,
 		},
 	}
 }
 
-func (s *Service) StepBrightness(ctx context.Context, action *rules.Action) error {
-	id, ok := s.Client.ResourceRegistry.ByTypeAndName[action.Target.Typ][action.Target.ID]
-	if !ok {
-		return fmt.Errorf("unable to resolve device id %s.%s", action.Target.Typ, action.Target.ID)
-	}
-
+func (s *Service) StepBrightness(ctx context.Context, action *automation.Action) error {
 	step, err := action.IntParam("step")
 	if err != nil {
 		s.Logger.Error("expected action param: step", zap.Any("params", action.Params))
@@ -62,29 +56,60 @@ func (s *Service) StepBrightness(ctx context.Context, action *rules.Action) erro
 
 	direction, err := action.StringParam("direction")
 
-	switch action.Target.Typ {
-	case "light":
-		return s.Client.LightStepBrightness(ctx, id, math.Abs(float64(step)), direction)
-	default:
-		return fmt.Errorf("unknown target type: %s", action.Target.Typ)
+	for _, target := range action.Targets {
+		if target.EntityID == "" {
+			return errors.New("target entity id required")
+		}
+
+		typ, ok := s.Client.ResourceRegistry.GetTypeByID(target.EntityID)
+		if !ok {
+			s.Logger.Warn("Unable to resolve type by id", zap.String("id", target.EntityID))
+		}
+
+		switch typ {
+		case "light":
+			return s.Client.LightStepBrightness(ctx, target.EntityID, math.Abs(float64(step)), direction)
+		case "grouped_light":
+			return errors.New("step_brightness is not yet supported for grouped lights")
+		default:
+			return fmt.Errorf("entity type %s is not supported", typ)
+		}
 	}
+	return nil
 }
 
-func (s *Service) Toggle(ctx context.Context, action *rules.Action) error {
-	on, err := action.BooleanParam("on")
-	if err != nil {
-		return err
+func (s *Service) Toggle(ctx context.Context, action *automation.Action) error {
+	for _, target := range action.Targets {
+		if target.EntityID == "" {
+			return errors.New("target entity id required")
+		}
+		typ, ok := s.Client.ResourceRegistry.GetTypeByID(target.EntityID)
+		if !ok {
+			s.Logger.Warn("Unable to resolve type by id", zap.String("id", target.EntityID))
+		}
+
+		switch typ {
+		case "light":
+			targetLight, err := s.Client.Light(ctx, target.EntityID)
+			if err != nil {
+				return fmt.Errorf("failed to get light state: %w", err)
+			}
+			// flip current on state
+			err = s.Client.LightToggle(ctx, target.EntityID, !targetLight.On.On)
+			if err != nil {
+				s.Logger.Error("failed to toggle light", zap.String("id", target.EntityID))
+			}
+
+		case "grouped_light":
+			err := errors.New("toggle is not yet supported for grouped lights")
+			if err != nil {
+				s.Logger.Error("failed to toggle grouped_light", zap.String("id", target.EntityID))
+			}
+
+		default:
+			s.Logger.Error("entity type is not supported", zap.String("type", typ))
+		}
 	}
 
-	target, ok := s.Client.ResourceRegistry.ResolveName(action.Target.Typ, action.Target.ID)
-	if !ok {
-		return fmt.Errorf("unable to resolve target for %s:%s", action.Target.Typ, action.Target.ID)
-	}
-
-	switch action.Target.Typ {
-	case "light":
-		return s.Client.LightToggle(ctx, target, !on)
-	default:
-		return fmt.Errorf("unknown target type: %s", action.Target.Typ)
-	}
+	return nil
 }

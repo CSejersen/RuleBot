@@ -2,38 +2,38 @@ package engine
 
 import (
 	"go.uber.org/zap"
-	"home_automation_server/engine/types"
+	"home_automation_server/types"
 	"sync"
 )
 
 type EventBus struct {
-	subscribers map[chan types.ProcessedEvent]struct{}
+	subscribers map[chan types.Event]struct{}
 	mu          sync.Mutex
 	Logger      *zap.Logger
 }
 
 func NewEventBus() *EventBus {
 	return &EventBus{
-		subscribers: make(map[chan types.ProcessedEvent]struct{}),
+		subscribers: make(map[chan types.Event]struct{}),
 	}
 }
 
-func (eb *EventBus) Subscribe() chan types.ProcessedEvent {
-	ch := make(chan types.ProcessedEvent, 100) // buffered
+func (eb *EventBus) Subscribe() chan types.Event {
+	ch := make(chan types.Event, 100)
 	eb.mu.Lock()
 	eb.subscribers[ch] = struct{}{}
 	eb.mu.Unlock()
 	return ch
 }
 
-func (eb *EventBus) Unsubscribe(ch chan types.ProcessedEvent) {
+func (eb *EventBus) Unsubscribe(ch chan types.Event) {
 	eb.mu.Lock()
 	delete(eb.subscribers, ch)
 	close(ch)
 	eb.mu.Unlock()
 }
 
-func (eb *EventBus) Publish(event types.ProcessedEvent) {
+func (eb *EventBus) Publish(event types.Event) {
 	eb.mu.Lock()
 	defer eb.mu.Unlock()
 	for ch := range eb.subscribers {

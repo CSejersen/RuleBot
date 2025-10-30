@@ -76,7 +76,7 @@ func (c *Client) doRequest(ctx context.Context, method, ip, path string, body in
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	//c.Logger.Debug("sending request",
+	//c.logger.Debug("sending request",
 	//	zap.String("method", method),
 	//	zap.String("url", url),
 	//	zap.Any("body", body))

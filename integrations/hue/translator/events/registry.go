@@ -1,19 +1,16 @@
 package events
 
-import "home_automation_server/integrations/types"
+import "home_automation_server/types"
 
 // TODO: move away from magic strings here.
-var Registry = map[string]types.EventData{
+var Registry = map[string]types.ExternalEventDescriptor{
 	"light": {
-		Constructor:  func() types.SourceEvent { return &LightUpdate{} },
-		StateChanges: []string{"brightness", "mirek", "power_mode", "color_xy", "effect", "alert", "dynamics_speed", "gradient_mode"},
+		Constructor: func() types.ExternalEvent { return &LightUpdate{} },
 	},
 	"grouped_light": {
-		Constructor:  func() types.SourceEvent { return &GroupedLightUpdate{} },
-		StateChanges: []string{"brightness", "mirek", "power_mode", "color_xy", "effect", "alert", "dynamics_speed", "gradient_mode"},
+		Constructor: func() types.ExternalEvent { return &GroupedLightUpdate{} },
 	},
 	"scene": {
-		Constructor:  func() types.SourceEvent { return &SceneUpdate{} },
-		StateChanges: []string{"active_status"},
+		Constructor: func() types.ExternalEvent { return &SceneUpdate{} },
 	},
 }

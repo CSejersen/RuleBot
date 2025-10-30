@@ -2,11 +2,12 @@ package services
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"go.uber.org/zap"
-	"home_automation_server/engine/rules"
+	"home_automation_server/automation"
+	"home_automation_server/integrations"
 	"home_automation_server/integrations/bangandolufsen/client"
-	"home_automation_server/integrations/types"
+	"home_automation_server/types"
 )
 
 type Service struct {
@@ -14,79 +15,81 @@ type Service struct {
 	Logger *zap.Logger
 }
 
-func (s *Service) ExportServices() map[string]types.ServiceData {
-	return map[string]types.ServiceData{
+func (s *Service) ExportServices() map[string]integrations.ServiceSpec {
+	return map[string]integrations.ServiceSpec{
 		"set_playback_source": {
-			FullName: "bang_and_olufsen.set_playback_source",
-			Handler:  s.SetPlaybackSource,
-			RequiredParams: map[string]types.ParamMetadata{
+			Handler: s.SetPlaybackSource,
+			RequiredParams: map[string]integrations.ParamMetadata{
 				"source": {
 					DataType:    "string",
 					Description: "the name of the source to activate",
 				},
 			},
-			RequiresTargetType: false,
-			RequiresTargetID:   true,
+			AllowedTargets: integrations.TargetSpec{
+				Type:        []integrations.TargetType{integrations.TargetTypeEntity},
+				EntityTypes: []types.EntityType{types.EntityTypeSpeaker},
+			},
 		},
 		"expand_experience": {
-			FullName: "bang_and_olufsen.expand_experience",
-			Handler:  s.ExpandExperience,
-			RequiredParams: map[string]types.ParamMetadata{
+			Handler: s.ExpandExperience,
+			RequiredParams: map[string]integrations.ParamMetadata{
 				"to": {
 					DataType:    "string",
 					Description: "the friendly name of the device to expand the experience to",
 				},
 			},
-			RequiresTargetType: false,
-			RequiresTargetID:   true,
+			AllowedTargets: integrations.TargetSpec{
+				Type:        []integrations.TargetType{integrations.TargetTypeEntity},
+				EntityTypes: []types.EntityType{types.EntityTypeSpeaker},
+			},
 		},
 	}
 }
 
-func (s *Service) SetPlaybackSource(ctx context.Context, action *rules.Action) error {
+func (s *Service) SetPlaybackSource(ctx context.Context, action *automation.Action) error {
 	source, err := action.StringParam("source")
 	if err != nil {
 		s.Logger.Error("Error getting 'source' param", zap.Error(err))
 		return err
 	}
 
-	device, ok := s.Client.Config.Devices[action.Target.ID]
-	if !ok {
-		return fmt.Errorf("device %s not found", action.Target.ID)
-	}
-
-	switch device.IsMozart {
-	case true:
-		if err := s.Client.SetPlaybackSource(ctx, device.IP, source); err != nil {
-			return fmt.Errorf("failed to set playback source: %w", err)
+	for _, target := range action.Targets {
+		if target.EntityID == "" {
+			return errors.New("target entity id should not be empty")
 		}
-		return nil
 
-	case false:
-		return fmt.Errorf("playback source is not supported for non-mozart devices")
+		ip, ok := s.Client.IpForDevice(target.EntityID)
+		if !ok {
+			s.Logger.Error("failed to find device_ip", zap.String("jid", target.EntityID))
+		}
+
+		if err := s.Client.SetPlaybackSource(ctx, ip, source); err != nil {
+			s.Logger.Error("failed to set playback source", zap.Error(err))
+		}
 	}
 
 	return nil
 }
 
-func (s *Service) ExpandExperience(ctx context.Context, action *rules.Action) error {
-	device, ok := s.Client.Config.Devices[action.Target.ID]
-	if !ok {
-		return fmt.Errorf("device %s not found", action.Target.ID)
-	}
-
+func (s *Service) ExpandExperience(ctx context.Context, action *automation.Action) error {
 	expandTo, err := action.StringParam("to")
 	if err != nil {
 		s.Logger.Error("Error getting 'to' param", zap.Error(err))
 	}
 
-	toDevice, ok := s.Client.Config.Devices[expandTo]
-	if !ok {
-		return fmt.Errorf("device %s not found", expandTo)
+	for _, target := range action.Targets {
+		if target.EntityID == "" {
+			return errors.New("target entity id should not be empty")
+		}
+
+		ip, ok := s.Client.IpForDevice(target.EntityID)
+		if !ok {
+			s.Logger.Error("failed to find device_ip", zap.String("entityID", target.EntityID))
+		}
+		if err := s.Client.ExpandExperience(ctx, ip, expandTo); err != nil {
+			s.Logger.Error("failed to set playback source", zap.Error(err))
+		}
 	}
 
-	if err := s.Client.ExpandExperience(ctx, device.IP, toDevice.JID); err != nil {
-		return fmt.Errorf("failed to expand experience: %w", err)
-	}
 	return nil
 }

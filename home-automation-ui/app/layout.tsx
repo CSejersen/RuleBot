@@ -1,9 +1,9 @@
 import "@/app/globals.css"
-import { AppSidebar } from "@/components/app-sidebar"
-import { PageBreadcrumb } from "@/components/page-breadcrumb"
+import { AppSidebar } from "@/components/layout/app-sidebar"
+import { PageBreadcrumb } from "@/components/layout/page-breadcrumb"
 import { Separator } from "@/components/ui/separator"
-import { ThemeProvider } from "@/components/theme-provider"
-import { ModeToggle } from "@/components/mode-toggle"
+import { ThemeProvider } from "@/components/layout/theme-provider"
+import { ModeToggle } from "@/components/layout/mode-toggle"
 import {
   SidebarInset,
   SidebarProvider,
@@ -14,7 +14,7 @@ import type { ReactNode } from "react"
 
 export const metadata: Metadata = {
   title: "Home Automation Console",
-  description: "Manage rules, devices, and integrations",
+  description: "Manage rules, devices, and integration",
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -10,13 +10,18 @@ import (
 )
 
 type Config struct {
-	Devices map[string]Device `yaml:"devices"` // key: friendly_name (name displayed by the bang and olufsen app)
+	Devices map[string]Device `yaml:"devices"` // key: JID
 }
 
 type Device struct {
 	IP       string `yaml:"ip"`
 	JID      string `yaml:"jid"`
 	IsMozart bool   `yaml:"is_mozart"`
+}
+
+func (c *Client) IpForDevice(jid string) (string, bool) {
+	device, ok := c.Config.Devices[jid]
+	return device.IP, ok
 }
 
 // TODO: implement a fs watcher for the rules file to update the config on changes.

@@ -21,3 +21,12 @@ func (r *RoomGet) GetType() string {
 func (r *RoomGet) GetID() string {
 	return r.ID
 }
+
+func (r *RoomGet) GetGroupedLightID() (string, bool) {
+	for _, svc := range r.Services {
+		if svc.RType == "grouped_light" {
+			return svc.RID, true
+		}
+	}
+	return "", false
+}

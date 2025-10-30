@@ -4,11 +4,12 @@ import (
 	"context"
 	"go.uber.org/zap"
 	"home_automation_server/engine"
-	"home_automation_server/engine/types"
+	"home_automation_server/types"
 	"net/http"
 )
 
 type Server struct {
+	ctx       context.Context
 	mux       *http.ServeMux
 	httpSrv   *http.Server
 	Engine    *engine.Engine
@@ -16,8 +17,9 @@ type Server struct {
 	Logger    *zap.Logger
 }
 
-func NewServer(e *engine.Engine, logger *zap.Logger, eventCh chan types.ProcessedEvent) *Server {
+func NewServer(ctx context.Context, e *engine.Engine, logger *zap.Logger, eventCh chan types.Event) *Server {
 	s := &Server{
+		ctx:       ctx,
 		Engine:    e,
 		WSManager: NewWSManager(),
 		mux:       http.NewServeMux(),
@@ -44,9 +46,18 @@ func (s *Server) Start(addr string) {
 }
 
 func (s *Server) routes() {
-	s.mux.HandleFunc("/api/integrations", s.handleIntegrations)
+	s.mux.HandleFunc("/api/integrations/descriptors", s.handleIntegrationDescriptors)
+	s.mux.HandleFunc("/api/integrations/configs/", s.handleIntegrationConfigSubresources)
+
+	s.mux.HandleFunc("/api/devices", s.handleDevices)
+	s.mux.HandleFunc("/api/devices/", s.handleDevicesSubResources)
+
 	s.mux.HandleFunc("/api/services", s.handleServices)
+
 	s.mux.HandleFunc("/api/integrations/", s.handleIntegrationSubresources)
+
+	s.mux.HandleFunc("/api/states", s.handleStatesSubresources)
+
 	s.mux.HandleFunc("/ws", s.handleWS)
 }
 

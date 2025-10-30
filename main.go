@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 	"home_automation_server/api"
@@ -11,6 +12,8 @@ import (
 )
 
 func main() {
+	fmt.Println("Starting engine")
+	os.Stdout.Sync()
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -18,7 +21,6 @@ func main() {
 
 	ctx, stop := setupContext()
 	defer stop()
-
 	logger := setupLogger()
 	defer logger.Sync()
 
@@ -29,11 +31,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	registerIntegrations(ctx, e, logger)
+	registerIntegrationDescriptors(e)
+	if err := LoadIntegrations(ctx, e); err != nil {
+		log.Fatal(err)
+	}
 
 	// Setup API + WS Server
 	eventCh := e.ProcessedEventBus.Subscribe()
-	apiServer := api.NewServer(e, logger, eventCh)
+	apiServer := api.NewServer(ctx, e, logger, eventCh)
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		port = "8080"

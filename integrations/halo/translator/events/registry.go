@@ -1,20 +1,17 @@
 package events
 
 import (
-	"home_automation_server/integrations/types"
+	"home_automation_server/types"
 )
 
-var Registry = map[string]types.EventData{
+var Registry = map[string]types.ExternalEventDescriptor{
 	"wheel": {
-		Constructor:  func() types.SourceEvent { return &WheelEvent{} },
-		StateChanges: []string{"clockwise", "counter_clockwise"},
+		Constructor: func() types.ExternalEvent { return &WheelEvent{} },
 	},
 	"button": {
-		Constructor:  func() types.SourceEvent { return &ButtonEvent{} },
-		StateChanges: []string{"pressed", "released"},
+		Constructor: func() types.ExternalEvent { return &ButtonEvent{} },
 	},
 	"system": {
-		Constructor:  func() types.SourceEvent { return &SystemEvent{} },
-		StateChanges: []string{"sleep", "standby", "active"},
+		Constructor: func() types.ExternalEvent { return &SystemEvent{} },
 	},
 }

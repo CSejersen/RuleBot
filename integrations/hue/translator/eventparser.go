@@ -4,20 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"go.uber.org/zap"
-	"home_automation_server/integrations/types"
+	"home_automation_server/types"
 	"time"
 )
 
 // EventParser parses raw bytes into the correct types type
 type EventParser struct {
 	Logger        *zap.Logger
-	EventRegistry map[string]types.EventData
+	EventRegistry map[string]types.ExternalEventDescriptor
 }
 
 func newEventParser(logger *zap.Logger) EventParser {
 	return EventParser{
 		Logger:        logger,
-		EventRegistry: make(map[string]types.EventData),
+		EventRegistry: make(map[string]types.ExternalEventDescriptor),
 	}
 }
 
@@ -33,7 +33,7 @@ type TypeWrapper struct {
 }
 
 type EventBatch struct {
-	Events    []types.SourceEvent
+	Events    []types.ExternalEvent
 	TimeStamp time.Time
 }
 
@@ -50,7 +50,7 @@ func (p *EventParser) parse(b []byte) (EventBatch, error) {
 		envelopes = append(envelopes, single)
 	}
 
-	allEvents := []types.SourceEvent{}
+	allEvents := []types.ExternalEvent{}
 	timeStamp := time.Time{}
 
 	for _, envelope := range envelopes {
@@ -94,6 +94,6 @@ func (p *EventParser) parse(b []byte) (EventBatch, error) {
 }
 
 // RegisterEvent registers a constructor for an eventType string
-func (p *EventParser) RegisterEvent(eventType string, data types.EventData) {
+func (p *EventParser) RegisterEvent(eventType string, data types.ExternalEventDescriptor) {
 	p.EventRegistry[eventType] = data
 }

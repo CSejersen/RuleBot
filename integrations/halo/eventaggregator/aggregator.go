@@ -2,8 +2,7 @@ package eventaggregator
 
 import (
 	"go.uber.org/zap"
-	"home_automation_server/engine/types"
-	"home_automation_server/integrations/halo/translator"
+	"home_automation_server/types"
 	"sync"
 )
 
@@ -22,10 +21,11 @@ func New(logger *zap.Logger) *Aggregator {
 }
 
 func (a *Aggregator) Aggregate(e types.Event) *types.Event {
-	a.Logger.Debug("received event", zap.Any("event", e))
+	// let non wheel events pass through
 	if e.Type != "wheel" {
 		return &e
 	}
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.EventBuffer = append(a.EventBuffer, e)
@@ -39,25 +39,8 @@ func (a *Aggregator) Flush() *types.Event {
 		return nil
 	}
 
-	totalCount := 0
-	for _, e := range a.EventBuffer {
-		step, err := e.IntPayload("step")
-		if err != nil {
-			a.Logger.Error("Failed to parse step payload", zap.Error(err))
-		}
-		totalCount += step
-	}
-
-	first := a.EventBuffer[0]
+	// if we have multiple wheel events in the buffer, only send the newest one as that will contain the up-to-date button value.
+	newest := a.EventBuffer[len(a.EventBuffer)-1]
 	a.EventBuffer = []types.Event{}
-	return &types.Event{
-		Source:      first.Source,
-		Type:        first.Type,
-		Entity:      first.Entity,
-		StateChange: translator.ResolveWheelStateChange(totalCount),
-		Payload: map[string]interface{}{
-			"step": totalCount,
-		},
-		Time: first.Time,
-	}
+	return &newest
 }

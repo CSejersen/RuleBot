@@ -1,11 +1,13 @@
 package api
 
 import (
-	"github.com/gorilla/websocket"
-	"go.uber.org/zap"
-	"home_automation_server/engine/types"
+	"encoding/json"
+	"home_automation_server/types"
 	"net/http"
 	"sync"
+
+	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
 )
 
 type WSManager struct {
@@ -32,7 +34,7 @@ func (wsm *WSManager) RemoveClient(conn *websocket.Conn) {
 	conn.Close()
 }
 
-func (wsm *WSManager) Start(eventCh chan types.ProcessedEvent) {
+func (wsm *WSManager) Start(eventCh chan types.Event) {
 	go func() {
 		for event := range eventCh {
 			wsm.mu.Lock()
@@ -66,9 +68,33 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer s.WSManager.RemoveClient(conn)
 
 	for {
-		_, _, err := conn.ReadMessage()
+		_, msgBytes, err := conn.ReadMessage()
 		if err != nil {
+			s.Logger.Info("WS client disconnected", zap.Error(err))
 			break
+		}
+
+		var msg struct {
+			Type string                 `json:"type"`
+			Data map[string]interface{} `json:"data,omitempty"`
+		}
+		if err := json.Unmarshal(msgBytes, &msg); err != nil {
+			s.Logger.Warn("Invalid WS message", zap.Error(err))
+			continue
+		}
+
+		switch msg.Type {
+		case "reload_automations":
+			if err := s.Engine.LoadAutomations(s.ctx); err != nil {
+				s.Logger.Error("Failed to reload rules", zap.Error(err))
+			}
+		case "load_integration":
+			integrationName := msg.Data["integration_name"].(string)
+			if err := s.Engine.LoadIntegration(s.ctx, integrationName); err != nil {
+				s.Logger.Error("Failed to load integration", zap.Error(err), zap.String("integration_name", integrationName))
+			}
+		default:
+			s.Logger.Warn("Unknown WS command", zap.String("type", msg.Type))
 		}
 	}
 }

@@ -12,7 +12,7 @@ import (
 	"net/http"
 )
 
-type Client struct {
+type ApiClient struct {
 	IP               string
 	AppKey           string
 	ResourceRegistry ResourceRegistry
@@ -20,8 +20,8 @@ type Client struct {
 	Logger           *zap.Logger
 }
 
-func New(ip string, appKey string, logger *zap.Logger) (*Client, error) {
-	c := &Client{
+func New(ip string, appKey string, logger *zap.Logger) (*ApiClient, error) {
+	c := &ApiClient{
 		IP:     ip,
 		AppKey: appKey,
 		client: newHTTPClient(),
@@ -43,19 +43,19 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-func (c *Client) get(ctx context.Context, path string, v interface{}) error {
+func (c *ApiClient) get(ctx context.Context, path string, v interface{}) error {
 	return c.doApiV2Request(ctx, http.MethodGet, path, nil, v)
 }
 
-func (c *Client) post(ctx context.Context, path string, body, v interface{}) error {
+func (c *ApiClient) post(ctx context.Context, path string, body, v interface{}) error {
 	return c.doApiV2Request(ctx, http.MethodPost, path, body, v)
 }
 
-func (c *Client) put(ctx context.Context, path string, body, v interface{}) error {
+func (c *ApiClient) put(ctx context.Context, path string, body, v interface{}) error {
 	return c.doApiV2Request(ctx, http.MethodPut, path, body, v)
 }
 
-func (c *Client) doApiV2Request(ctx context.Context, method, path string, body interface{}, v interface{}) error {
+func (c *ApiClient) doApiV2Request(ctx context.Context, method, path string, body interface{}, v interface{}) error {
 	url := fmt.Sprintf("https://%s/clip/v2/%s", c.IP, path)
 
 	var bodyReader io.Reader
