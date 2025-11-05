@@ -2,8 +2,10 @@
 
 import React from "react"
 import { useForm, FormProvider } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useEffect, useState } from "react"
 import { Automation, BaseTrigger, Condition, Action } from "@/types/automation"
+import { CreateAutomationSchema } from "@/types/automation/automation-schema"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,8 +14,12 @@ import { Switch } from "@/components/ui/switch"
 import { TriggerSection } from "./form-sections/trigger"
 import { ActionSection } from "./form-sections/action"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { FormItem, FormLabel, FormControl, FormDescription, FormMessage } from "@/components/ui/form"
 
-import { engineWSsendMessage } from "@/lib/engine-socket"
+import { sendSocketMessage } from "@/lib/engine-socket"
+
+// Context to track if save has been attempted
+export const SaveAttemptContext = React.createContext<boolean>(false)
 
 const STEPS = [
   { id: 0, label: "Details" },
@@ -35,6 +41,7 @@ export const CreateAutomationSheet = /* @__PURE__ */ React.memo(function CreateA
   editingAutomation = null,
 }: CreateAutomationSheetProps) {
   const [currentStep, setCurrentStep] = useState(0)
+  const [hasAttemptedSave, setHasAttemptedSave] = useState(false)
   const emptyAutomation: Automation = {
     alias: "",
     description: "",
@@ -45,8 +52,11 @@ export const CreateAutomationSheet = /* @__PURE__ */ React.memo(function CreateA
     last_triggered: null,
   }
   const methods = useForm<Automation>({
+    resolver: zodResolver(CreateAutomationSchema),
     defaultValues: emptyAutomation,
+    mode: "onSubmit",
   })
+
 
   useEffect(() => {
     if (!open) return
@@ -60,9 +70,27 @@ export const CreateAutomationSheet = /* @__PURE__ */ React.memo(function CreateA
       })
     }
     setCurrentStep(0)
+    setHasAttemptedSave(false)
   }, [editingAutomation, open])
 
   const handleSave = async () => {
+    // Mark that save has been attempted
+    setHasAttemptedSave(true)
+    // Validate form before submission
+    const isValid = await methods.trigger()
+    if (!isValid) {
+      // Find first step with errors and navigate there
+      const errors = methods.formState.errors
+      if (errors.alias || errors.description) {
+        setCurrentStep(0)
+      } else if (errors.triggers) {
+        setCurrentStep(1)
+      } else if (errors.actions) {
+        setCurrentStep(2)
+      }
+      return
+    }
+
     const method = editingAutomation ? "PUT" : "POST"
     const url = editingAutomation
       ? `/api/automations/${editingAutomation.id}`
@@ -76,12 +104,36 @@ export const CreateAutomationSheet = /* @__PURE__ */ React.memo(function CreateA
     })
 
     const data = await res.json()
-    if (!res.ok) return alert(data.error || "Failed to save automation")
+    if (!res.ok) {
+      // Parse and display validation errors from API
+      if (data.details?.fieldErrors) {
+        // Map Zod field errors to form errors
+        Object.entries(data.details.fieldErrors).forEach(([path, errorMessages]) => {
+          const messages = Array.isArray(errorMessages) ? errorMessages : [String(errorMessages)]
+          if (messages.length > 0) {
+            // Convert path like "triggers.0.data.entity_id" to nested path array
+            const fieldPath = path.split(".") as any[]
+            methods.setError(fieldPath, {
+              type: "server",
+              message: messages[0],
+            })
+          }
+        })
+        // Show form-level errors if any
+        if (data.details?.formErrors?.length > 0) {
+          alert(data.details.formErrors.join(", "))
+        }
+      } else {
+        // Fallback for non-Zod errors
+        alert(data.error || "Failed to save automation")
+      }
+      return
+    }
 
     onAutomationSaved(data.automation)
     onOpenChange(false)
     methods.reset(emptyAutomation)
-    engineWSsendMessage({ type: "reload_automations" })
+    sendSocketMessage({ type: "reload_automations" })
   }
 
   return (
@@ -153,51 +205,59 @@ export const CreateAutomationSheet = /* @__PURE__ */ React.memo(function CreateA
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1 px-6 mt-4">
-          {currentStep === 0 && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-base font-semibold mb-2">Alias</h3>
-                <Input
-                  placeholder="My Automation"
-                  value={methods.watch("alias")}
-                  onChange={(e) => methods.setValue("alias", e.target.value, { shouldDirty: true })}
-                />
-              </div>
+        <FormProvider {...methods}>
+          <SaveAttemptContext.Provider value={hasAttemptedSave}>
+            <div className="overflow-y-auto flex-1 px-6 mt-4">
+              {currentStep === 0 && (
+                <div className="space-y-6">
+                  <FormItem>
+                    <FormLabel>Alias</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="My Automation"
+                        {...methods.register("alias")}
+                      />
+                    </FormControl>
+                    {hasAttemptedSave && methods.formState.errors.alias && (
+                      <p className="text-sm text-destructive mt-1">{methods.formState.errors.alias.message}</p>
+                    )}
+                  </FormItem>
 
-              <div>
-                <h3 className="text-base font-semibold mb-2">Description</h3>
-                <Textarea
-                  placeholder="What does this automation do?"
-                  value={methods.watch("description")}
-                  onChange={(e) => methods.setValue("description", e.target.value, { shouldDirty: true })}
-                  className="resize-none"
-                  rows={3}
-                />
-              </div>
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="What does this automation do?"
+                        {...methods.register("description")}
+                        className="resize-none"
+                        rows={3}
+                      />
+                    </FormControl>
+                    {hasAttemptedSave && methods.formState.errors.description && (
+                      <p className="text-sm text-destructive mt-1">{methods.formState.errors.description.message}</p>
+                    )}
+                  </FormItem>
 
-              <div className="flex items-center space-x-3">
-                <Switch
-                  checked={!!methods.watch("enabled")}
-                  onCheckedChange={(checked) => methods.setValue("enabled", checked, { shouldDirty: true })}
-                />
-                <span className="text-sm font-medium">Enabled</span>
-              </div>
+                  <div className="flex items-center space-x-3">
+                    <Switch
+                      checked={!!methods.watch("enabled")}
+                      onCheckedChange={(checked) => methods.setValue("enabled", checked, { shouldDirty: true })}
+                    />
+                    <span className="text-sm font-medium">Enabled</span>
+                  </div>
+                </div>
+              )}
+
+              {currentStep === 1 && (
+                <TriggerSection />
+              )}
+
+              {currentStep === 2 && (
+                <ActionSection />
+              )}
             </div>
-          )}
-
-          {currentStep === 1 && (
-            <FormProvider {...methods}>
-              <TriggerSection />
-            </FormProvider>
-          )}
-
-          {currentStep === 2 && (
-            <FormProvider {...methods}>
-              <ActionSection />
-            </FormProvider>
-          )}
-        </div>
+          </SaveAttemptContext.Provider>
+        </FormProvider>
 
         {/* Navigation Footer */}
         <div className="border-t mt-6 px-6 py-4 flex justify-between items-center bg-background space-x-2">
@@ -216,7 +276,28 @@ export const CreateAutomationSheet = /* @__PURE__ */ React.memo(function CreateA
               </Button>
             ) : (
               <Button
-                onClick={() => setCurrentStep((prev) => Math.min(STEPS.length - 1, prev + 1))}
+                onClick={async () => {
+                  // Mark that validation has been attempted so errors will show
+                  setHasAttemptedSave(true)
+                  // Validate current step before proceeding
+                  let isValid = true
+                  if (currentStep === 0) {
+                    // Trigger validation and mark fields as touched so errors show
+                    isValid = await methods.trigger("alias")
+                    await methods.trigger("description")
+                    if (!isValid) {
+                      // Mark fields as touched to ensure errors are displayed
+                      methods.setFocus("alias")
+                    }
+                  } else if (currentStep === 1) {
+                    isValid = await methods.trigger("triggers")
+                  } else if (currentStep === 2) {
+                    isValid = await methods.trigger("actions")
+                  }
+                  if (isValid) {
+                    setCurrentStep((prev) => Math.min(STEPS.length - 1, prev + 1))
+                  }
+                }}
               >
                 Next
                 <ChevronRight className="w-4 h-4 ml-2" />

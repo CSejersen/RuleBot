@@ -4,6 +4,7 @@ import "encoding/json"
 
 type ButtonState = string
 type SystemState = string
+type StatusState = string
 
 const (
 	ButtonStatePressed  ButtonState = "pressed"
@@ -12,6 +13,9 @@ const (
 	SystemStateActive  SystemState = "active"
 	SystemStateStandby SystemState = "standby"
 	SystemStateSleep   SystemState = "sleep"
+
+	StatusStateOk    StatusState = "ok"
+	StatusStateError StatusState = "error"
 )
 
 type RawEvent struct {
@@ -39,6 +43,13 @@ type SystemEvent struct {
 	State SystemState `json:"state"`
 }
 
+type StatusEvent struct {
+	Type    string      `json:"type"`
+	State   StatusState `json:"state"`
+	Message string      `json:"message"`
+}
+
 func (e *WheelEvent) GetType() string  { return e.Type }
 func (e *ButtonEvent) GetType() string { return e.Type }
 func (e *SystemEvent) GetType() string { return e.Type }
+func (e *StatusEvent) GetType() string { return e.Type }

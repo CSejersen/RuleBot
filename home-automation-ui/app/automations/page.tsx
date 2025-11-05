@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { columns } from "./data-table/columns"
+import { createColumns } from "./data-table/columns"
 import { Automation } from "@/types/automation/automation"
 import { DataTable } from "./data-table/data-table"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,7 @@ import { CreateAutomationSheet } from "./create-automation-sheet"
 import { AutomationDetailsDialog } from "./data-table/automation-details-dialog"
 import { RowActionMenu } from "@/components/common/row-action-menu"
 import { useMemo } from "react"
-import { engineWSsendMessage } from "@/lib/engine-socket"
+import { sendSocketMessage } from "@/lib/engine-socket"
 
 async function getData(): Promise<Automation[]> {
   const res = await fetch("/api/automations", { cache: "no-store" })
@@ -36,9 +36,58 @@ export default function AutomationsPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const handleEnableChange = useCallback(async (automation: Automation, enabled: boolean) => {
+    let snapshot: Automation[] = []
+    setAutomations((prev) => {
+      snapshot = prev
+      return prev.map((a) => (a.id === automation.id ? { ...a, enabled } : a))
+    })
+    
+    try {
+      const res = await fetch(`/api/automations/${automation.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...automation, enabled }),
+      })
+      
+      if (!res.ok) {
+        throw new Error("Failed to update automation")
+      }
+      
+      sendSocketMessage({ type: "reload_automations" })
+    } catch (err: any) {
+      // Rollback on error
+      setAutomations(snapshot)
+      alert(err?.message || "An error occurred while updating the automation")
+    }
+  }, [])
+
+  const deleteAutomationOptimistic = useCallback(async (automation: Automation) => {
+    let snapshot: Automation[] = []
+    setAutomations((prev) => {
+      if (typeof window !== "undefined") console.log("optimistic remove setAutomations", { prevLength: prev.length })
+      snapshot = prev
+      return prev.filter((a) => a.id !== automation.id)
+    })
+    try {
+      const res = await fetch(`/api/automations/${automation.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Failed to delete automation")
+      }
+      if (typeof window !== "undefined") console.log("delete success", automation.id)
+      sendSocketMessage({ type: "reload_automations" })
+    } catch (err: any) {
+      // rollback
+      if (typeof window !== "undefined") console.log("delete failed, rollback", automation.id)
+      setAutomations(snapshot)
+      alert(err?.message || "An error occurred while deleting the automation")
+    }
+  }, [])
+
   const columnsWithActions = useMemo(() => {
     return [
-      ...columns,
+      ...createColumns(handleEnableChange),
       {
         id: "actions",
         header: "",
@@ -56,7 +105,6 @@ export default function AutomationsPage() {
               }}
               onDelete={async () => {
                 const automation = row.original as Automation
-                if (!automation?.id) return
                 await deleteAutomationOptimistic(automation)
               }}
             />
@@ -64,36 +112,11 @@ export default function AutomationsPage() {
         ),
       } as any,
     ]
-  }, [columns])
+  }, [handleEnableChange, deleteAutomationOptimistic])
 
   const handleRowClick = useCallback((automation: Automation) => {
     setSelectedAutomation(automation)
     setIsDialogOpen(true)
-  }, [])
-
-  const deleteAutomationOptimistic = useCallback(async (automation: Automation) => {
-    if (typeof window !== "undefined") console.log("deleteAutomationOptimistic called", automation.id)
-    let snapshot: Automation[] = []
-    // optimistic remove with snapshot capture
-    setAutomations((prev) => {
-      if (typeof window !== "undefined") console.log("optimistic remove setAutomations", { prevLength: prev.length })
-      snapshot = prev
-      return prev.filter((a) => a.id !== automation.id)
-    })
-    try {
-      const res = await fetch(`/api/automations/${automation.id}`, { method: "DELETE" })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || "Failed to delete automation")
-      }
-      if (typeof window !== "undefined") console.log("delete success", automation.id)
-      engineWSsendMessage({ type: "reload_automations" })
-    } catch (err: any) {
-      // rollback
-      if (typeof window !== "undefined") console.log("delete failed, rollback", automation.id)
-      setAutomations(snapshot)
-      alert(err?.message || "An error occurred while deleting the automation")
-    }
   }, [])
 
 

@@ -38,6 +38,9 @@ func DeepCopyState(s *types.State) types.State {
 		for k, v := range s.Attributes {
 			deepCopy.Attributes[k] = v
 		}
+	} else {
+		// if attributes are nil we initialize them to avoid nil pointer dereferences.
+		deepCopy.Attributes = make(map[string]any, len(s.Attributes))
 	}
 
 	return deepCopy
@@ -82,4 +85,41 @@ func ToFloat64(val any) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// StatesEqual compares two State objects and returns true if they have the same EntityID, State, and Attributes.
+// It ignores LastChanged, LastUpdated, and Context fields as these are metadata.
+func StatesEqual(a, b types.State) bool {
+	if a.EntityID != b.EntityID {
+		return false
+	}
+
+	// Compare main state using AnyEqual to handle numeric type conversions
+	if !AnyEqual(a.State, b.State) {
+		return false
+	}
+
+	// Compare attributes
+	aAttrs := a.Attributes
+	bAttrs := b.Attributes
+
+	// Both nil or both empty maps
+	if len(aAttrs) == 0 && len(bAttrs) == 0 {
+		return true
+	}
+
+	// One is nil/empty and the other isn't
+	if len(aAttrs) != len(bAttrs) {
+		return false
+	}
+
+	// Compare each attribute value
+	for k, aVal := range aAttrs {
+		bVal, ok := bAttrs[k]
+		if !ok || !AnyEqual(aVal, bVal) {
+			return false
+		}
+	}
+
+	return true
 }

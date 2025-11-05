@@ -11,13 +11,14 @@ import (
 )
 
 type EventPipeline struct {
-	Label        string
-	Source       integration.EventSource
-	Translator   integration.EventTranslator
-	Aggregator   integration.EventAggregator
-	EventChannel chan types.Event
-	StateCache   types.StateStore
-	Logger       *zap.Logger
+	Label              string
+	Source             integration.EventSource
+	Translator         integration.EventTranslator
+	Aggregator         integration.EventAggregator
+	EventChannel       chan types.Event
+	StateCache         types.StateStore
+	ServiceCallTracker *ServiceCallTracker
+	Logger             *zap.Logger
 
 	rawCh chan []byte
 	done  chan struct{}
@@ -36,16 +37,21 @@ func (e *Engine) RunEventPipelines(ctx context.Context) {
 
 // Construct pipeline with per-integration buffered channel
 func (e *Engine) constructEventPipeline(label string, stateCache types.StateStore, i *integration.Instance) EventPipeline {
+	// Set the service call tracker on the translator
+	i.Translator.SetServiceCallTracker(e.ServiceCallTracker)
+	e.Logger.Debug("Set service call tracker on translator", zap.String("integration", label))
+
 	return EventPipeline{
-		Label:        label,
-		Source:       i.EventSource,
-		Translator:   i.Translator,
-		Aggregator:   i.Aggregator,
-		EventChannel: e.EventChannel,
-		StateCache:   stateCache,
-		Logger:       e.Logger.With(zap.String("integration", label)),
-		rawCh:        make(chan []byte, 100), // per-integration buffer
-		done:         make(chan struct{}),
+		Label:              label,
+		Source:             i.EventSource,
+		Translator:         i.Translator,
+		Aggregator:         i.Aggregator,
+		EventChannel:       e.EventChannel,
+		StateCache:         stateCache,
+		ServiceCallTracker: e.ServiceCallTracker,
+		Logger:             e.Logger.With(zap.String("integration", label)),
+		rawCh:              make(chan []byte, 100), // per-integration buffer
+		done:               make(chan struct{}),
 	}
 }
 

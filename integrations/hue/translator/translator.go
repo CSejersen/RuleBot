@@ -2,22 +2,25 @@ package translator
 
 import (
 	"fmt"
-	"github.com/google/uuid"
-	"go.uber.org/zap"
+	"home_automation_server/engine/integration"
 	"home_automation_server/integrations/hue/client"
 	"home_automation_server/integrations/hue/translator/events"
 	"home_automation_server/types"
 	"home_automation_server/utils"
 	"time"
+
+	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // Translator translates a parsed hue types into a pubsub.Event
 type Translator struct {
-	Client         *client.ApiClient
-	EventParser    EventParser
-	logger         *zap.Logger
-	stateStore     types.StateStore
-	entityRegistry types.EntityRegistry
+	Client             *client.ApiClient
+	EventParser        EventParser
+	logger             *zap.Logger
+	stateStore         types.StateStore
+	entityRegistry     types.EntityRegistry
+	serviceCallTracker integration.ServiceCallTracker // Optional: tracks recent service calls for causality linking
 }
 
 // New is the constructor for Translator
@@ -38,6 +41,11 @@ func (t *Translator) init() {
 	t.LoadEvents()
 }
 
+// SetServiceCallTracker sets the service call tracker for causality linking
+func (t *Translator) SetServiceCallTracker(tracker integration.ServiceCallTracker) {
+	t.serviceCallTracker = tracker
+}
+
 func (t *Translator) Translate(raw []byte) ([]types.Event, error) {
 	eventBatch, err := t.EventParser.parse(raw)
 	if err != nil {
@@ -49,9 +57,9 @@ func (t *Translator) Translate(raw []byte) ([]types.Event, error) {
 	for _, e := range eventBatch.Events {
 		var translated *types.Event
 
-		// The event context
 		context := &types.Context{
-			ID: uuid.NewString(),
+			ID:     uuid.NewString(),
+			Origin: "external",
 		}
 
 		switch e.GetType() {
@@ -112,6 +120,18 @@ func (t *Translator) translateSceneUpdate(e types.ExternalEvent, ts time.Time, c
 	newState.State = sceneStatus.Active
 	newState.Attributes["last_recall"] = sceneStatus.LastRecall
 
+	// Build actual state map from device update
+	actualState := make(map[string]any)
+	actualState["state"] = sceneStatus.Active
+
+	// Try to match by comparing all changed fields
+	if t.serviceCallTracker != nil && len(actualState) > 0 {
+		if serviceCallContextID, exists := t.serviceCallTracker.FindBestMatch(entityID, actualState); exists {
+			context.ParentID = serviceCallContextID
+			context.Origin = "hue"
+		}
+	}
+
 	return &types.Event{
 		Type: types.EventTypeStateChanged,
 		Data: types.StateChangedData{
@@ -143,9 +163,14 @@ func (t *Translator) translateLightUpdate(e types.ExternalEvent, ts time.Time, c
 
 	entityID, ok := t.entityRegistry.Resolve(lightUpdate.ID)
 	if !ok {
-		return nil, fmt.Errorf("failed to resolve entityID for %s", lightUpdate.Metadata.Name)
+		name := "unknown"
+		if lightUpdate.Metadata != nil && lightUpdate.Metadata.Name != nil {
+			name = *lightUpdate.Metadata.Name
+		}
+		return nil, fmt.Errorf("failed to resolve entityID for %s", name)
 	}
 
+	// Old state needed for event and for construction of the new state.
 	oldState, err := t.getOldState(entityID)
 	if err != nil {
 		return nil, err
@@ -153,20 +178,31 @@ func (t *Translator) translateLightUpdate(e types.ExternalEvent, ts time.Time, c
 	newState := utils.DeepCopyState(&oldState)
 	newState.Context = context
 
-	if on != nil {
-		newState.State = *on
-	}
-	if newState.Attributes == nil {
-		newState.Attributes = make(map[string]any)
-	}
+	// Build a map of changes to match event with a service call
+	changes := make(map[string]any)
 	if brightness != nil {
+		changes["brightness"] = *brightness
 		newState.Attributes["brightness"] = *brightness
 	}
 	if colorXY != nil {
+		changes["color_xy"] = *colorXY
 		newState.Attributes["color_xy"] = *colorXY
 	}
 	if mirek != nil {
+		changes["mirek"] = *mirek
 		newState.Attributes["mirek"] = *mirek
+	}
+	if on != nil {
+		changes["on"] = *on
+		newState.State = *on
+	}
+
+	// Try to match by comparing all changed fields
+	if t.serviceCallTracker != nil && len(changes) > 0 {
+		if serviceCallContextID, exists := t.serviceCallTracker.FindBestMatch(entityID, changes); exists {
+			context.ParentID = serviceCallContextID
+			context.Origin = "hue"
+		}
 	}
 
 	return &types.Event{
@@ -212,20 +248,31 @@ func (t *Translator) translateGroupedLightUpdate(e types.ExternalEvent, ts time.
 	newState := utils.DeepCopyState(&oldState)
 	newState.Context = context
 
-	if on != nil {
-		newState.State = *on
-	}
-	if newState.Attributes == nil {
-		newState.Attributes = make(map[string]any)
-	}
+	// Build a map of state-changes to match event with a service-call.
+	stateChanges := make(map[string]any)
 	if brightness != nil {
+		stateChanges["brightness"] = *brightness
 		newState.Attributes["brightness"] = *brightness
 	}
 	if colorXY != nil {
+		stateChanges["color_xy"] = *colorXY
 		newState.Attributes["color_xy"] = *colorXY
 	}
 	if mirek != nil {
+		stateChanges["mirek"] = *mirek
 		newState.Attributes["mirek"] = *mirek
+	}
+	if on != nil {
+		stateChanges["on"] = *on
+		newState.State = *on
+	}
+
+	// Try to match by comparing all changed fields
+	if t.serviceCallTracker != nil && len(stateChanges) > 0 {
+		if serviceCallContextID, exists := t.serviceCallTracker.FindBestMatch(entityID, stateChanges); exists {
+			context.ParentID = serviceCallContextID
+			context.Origin = "hue"
+		}
 	}
 
 	return &types.Event{
@@ -245,7 +292,8 @@ func (t *Translator) getOldState(entityID string) (types.State, error) {
 	if !ok {
 		t.logger.Info("failed to fetch old state", zap.String("entity_id", entityID))
 		return types.State{
-			EntityID: entityID,
+			EntityID:   entityID,
+			Attributes: make(map[string]any),
 		}, nil
 	}
 	return oldState, nil

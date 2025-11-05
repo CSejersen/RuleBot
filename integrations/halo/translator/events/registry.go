@@ -14,4 +14,7 @@ var Registry = map[string]types.ExternalEventDescriptor{
 	"system": {
 		Constructor: func() types.ExternalEvent { return &SystemEvent{} },
 	},
+	"status": {
+		Constructor: func() types.ExternalEvent { return &StatusEvent{} },
+	},
 }

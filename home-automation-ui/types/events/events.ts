@@ -1,4 +1,4 @@
-export type EventType = 'state_changed' | 'call_service' | 'time_changed';
+export type EventType = string;
 
 export type State = {
   entity_id: string;
@@ -6,7 +6,7 @@ export type State = {
   attributes: Record<string, any>;
   last_changed: string;
   last_updated: string;
-  context?: { id: string; parent_id?: string; created_at?: string };
+  context?: { id: string; parent_id?: string; origin?: string; created_at?: string };
 };
 
 export type StateChangedData = {
@@ -22,15 +22,22 @@ export type CallServiceData = {
   entity_id?: string;
 };
 
+export type DomainSpecificEventData = {
+  type: string;  // Domain-specific event type, e.g., "halo_status"
+  entity_id?: string;
+  data: Record<string, any>;
+};
+
 export type Event = {
   id: string;
   type: EventType;
-  data: StateChangedData | CallServiceData | Record<string, any>;
+  data: StateChangedData | CallServiceData | DomainSpecificEventData | Record<string, any>;
   context_id: string | null;
   time_fired: string;
   context?: {
     id: string;
     parent_id?: string;
+    origin?: string;
     created_at?: string;
   };
   created_at?: string;

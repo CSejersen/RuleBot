@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
-	"go.uber.org/zap"
 	"home_automation_server/automation"
 	"home_automation_server/integrations"
 	"home_automation_server/integrations/halo/client"
 	"home_automation_server/types"
+	"math"
+
+	"go.uber.org/zap"
 )
 
 type Service struct {
@@ -20,7 +22,7 @@ func (s *Service) ExportServices() map[string]integrations.ServiceSpec {
 			Handler: s.UpdateButtonValue,
 			RequiredParams: map[string]integrations.ParamMetadata{
 				"value": {
-					DataType:    "float",
+					DataType:    "int",
 					Description: "New value for button, between 0..100",
 				},
 			},
@@ -32,19 +34,33 @@ func (s *Service) ExportServices() map[string]integrations.ServiceSpec {
 	}
 }
 
-func (s *Service) UpdateButtonValue(ctx context.Context, action *automation.Action) error {
-	value, err := action.FloatParam("value")
+func (s *Service) UpdateButtonValue(ctx context.Context, action *automation.Action, emitter integrations.EventEmitter) error {
+	floatValue, err := action.FloatParam("value")
 	if err != nil {
 		return err
 	}
 
-	s.Logger.Debug("n targets", zap.Int("n", len(action.Targets)))
+	value := int(math.Round(floatValue))
 
 	for _, target := range action.Targets {
-		s.Logger.Info("Updating button value", zap.Float64("value", value), zap.String("id", target.EntityID))
-		err := s.Client.UpdateButtonValue(ctx, target.EntityID, int(value))
+		err := s.Client.UpdateButtonValue(ctx, target.ExternalID, value)
 		if err != nil {
-			s.Logger.Error("Failed to update button value")
+			s.Logger.Error("Failed to update button value", zap.Error(err))
+			return err
+		}
+
+		// Emit optimistic state_changed event after successful API call
+		if emitter != nil {
+			newState := &types.State{
+				EntityID: target.EntityID,
+				State:    value,
+			}
+
+			if err := emitter.EmitOptimisticStateChanged(target.EntityID, newState, nil); err != nil {
+				s.Logger.Warn("Failed to emit optimistic state_changed event",
+					zap.String("entity_id", target.EntityID),
+					zap.Error(err))
+			}
 		}
 	}
 

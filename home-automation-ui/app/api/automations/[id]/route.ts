@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { validateRequest } from '@/lib/validate';
 import { CreateAutomationSchema } from '@/types/automation/automation-schema';
+import { parseJsonOrFallback } from '@/lib/utils';
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -43,9 +44,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       id: row.id,
       alias: row.alias,
       description: row.description,
-      triggers: row.triggers ? JSON.parse(row.triggers) : [],
-      conditions: row.conditions ? JSON.parse(row.conditions) : [],
-      actions: row.actions ? JSON.parse(row.actions) : [],
+      triggers: row.triggers ? parseJsonOrFallback(row.triggers) : [],
+      conditions: row.conditions ? parseJsonOrFallback(row.conditions) : [],
+      actions: row.actions ? parseJsonOrFallback(row.actions) : [],
       enabled: row.enabled === 1,
       last_triggered: row.last_triggered,
       created_at: row.created_at,

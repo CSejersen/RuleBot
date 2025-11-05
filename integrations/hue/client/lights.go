@@ -3,8 +3,9 @@ package client
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
 	"home_automation_server/integrations/hue/client/types"
+
+	"go.uber.org/zap"
 )
 
 type LightsGetResponse struct {
@@ -71,5 +72,20 @@ func (c *ApiClient) LightStepColor(ctx context.Context, id string, xy types.XY) 
 		c.Logger.Error("failed to step color", zap.Any("errs", resp.Errors))
 		return err
 	}
+	return nil
+}
+
+func (c *ApiClient) LightSetBrightness(ctx context.Context, id string, brightness float64) error {
+	path := fmt.Sprintf("resource/light/%s", id)
+	req := types.LightPut{
+		Dimming: &types.DimmingPut{Brightness: brightness},
+	}
+
+	resp := types.PutResponse{}
+	if err := c.put(ctx, path, req, &resp); err != nil {
+		c.Logger.Error("failed to set brightness", zap.Any("api_errors", resp.Errors), zap.Any("resource_identifiers", resp.Data))
+		return err
+	}
+
 	return nil
 }

@@ -12,7 +12,6 @@ import { Automation } from "@/types/automation"
 import { TriggerDetails, ConditionDetails, ActionDetails } from "./automation-details-sections"
 import { Badge } from "@/components/ui/badge"
 
-import { engineWSsendMessage } from "@/lib/engine-socket"
 import React from "react"
 
 interface AutomationDetailsDialogProps {

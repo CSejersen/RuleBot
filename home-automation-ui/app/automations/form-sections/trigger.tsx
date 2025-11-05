@@ -1,9 +1,10 @@
 "use client"
 
+import React from "react"
 import { Automation, BaseTrigger, StateTrigger, EventTrigger } from "@/types/automation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { FormItem, FormLabel, FormControl, FormDescription } from "@/components/ui/form"
+import { FormItem, FormLabel, FormControl, FormDescription, FormMessage } from "@/components/ui/form"
 import { EntitySelector } from "@/components/selectors/entity-selector"
 import { AttributeSelector } from "@/components/selectors/attribute-selector"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -15,9 +16,23 @@ import { Trash2, ChevronDown, HelpCircle } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export function TriggerSection() {
-  const { control, setValue, watch } = useFormContext<Automation>()
+  const { control, setValue, watch, formState: { errors } } = useFormContext<Automation>()
   const { fields, append, remove, update } = useFieldArray({ control, name: "triggers" })
   const [openTrigger, setOpenTrigger] = useState<string | undefined>(undefined)
+  const prevFieldsLength = React.useRef(0)
+
+  // When editing, expand the first trigger if it exists
+  useEffect(() => {
+    if (fields.length === 0) {
+      // Reset when fields are cleared
+      setOpenTrigger(undefined)
+      prevFieldsLength.current = 0
+    } else if (prevFieldsLength.current === 0 && fields.length > 0 && openTrigger === undefined) {
+      // Expand first trigger when fields transition from empty to populated (editing mode)
+      setOpenTrigger("trigger-0")
+    }
+    prevFieldsLength.current = fields.length
+  }, [fields.length, openTrigger])
 
   const addTrigger = (type: BaseTrigger["type"]) => {
     const newTrigger: BaseTrigger =
@@ -31,6 +46,8 @@ export function TriggerSection() {
 
   const updateTrigger = (index: number, updatedTrigger: BaseTrigger) => {
     update(index, updatedTrigger)
+    // Trigger validation for this specific trigger
+    setValue(`triggers.${index}`, updatedTrigger, { shouldValidate: true })
   }
 
   const removeTrigger = (index: number) => {
@@ -69,8 +86,13 @@ export function TriggerSection() {
       </div>
 
       {fields.length === 0 && (
-        <div className="border rounded-md p-4 text-sm text-muted-foreground mt-8">
+        <div className="space-y-2">
+          <div className="border rounded-md p-4 text-sm text-muted-foreground mt-8">
             No triggers yet. Add a trigger to decide when this automation should run.
+          </div>
+          {errors.triggers && (
+            <p className="text-sm text-destructive mt-2">{errors.triggers.message || "At least one trigger is required"}</p>
+          )}
         </div>
       )}
 
@@ -93,25 +115,32 @@ export function TriggerSection() {
                         {summary}
                       </span>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600 hover:bg-red-50 shrink-0"
+                    <div
+                      className="inline-flex items-center justify-center h-8 w-8 p-0 rounded-md text-sm font-medium transition-colors text-muted-foreground hover:text-red-600 hover:bg-red-50 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       onClick={(e) => {
                         e.stopPropagation()
                         removeTrigger(index)
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          removeTrigger(index)
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                       aria-label="Remove trigger"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </Button>
+                    </div>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-4 p-3 pb-4">
                     {trigger.type === "state" && (
                       <StateTriggerForm
+                        triggerIndex={index}
                         trigger={trigger.data as StateTrigger}
                         onChange={(data) => updateTrigger(index, { ...trigger, data })}
                       />
@@ -119,6 +148,7 @@ export function TriggerSection() {
 
                     {trigger.type === "event" && (
                       <EventTriggerForm
+                        triggerIndex={index}
                         trigger={trigger.data as EventTrigger}
                         onChange={(data) => updateTrigger(index, { ...trigger, data })}
                       />
@@ -143,12 +173,15 @@ const TRIGGER_TYPE_OPTIONS: Array<{ value: BaseTrigger["type"], label: string, d
 
 
 interface StateTriggerFormProps {
+  triggerIndex: number
   trigger: StateTrigger
   onChange: (data: StateTrigger) => void
 }
 
-export function StateTriggerForm({ trigger, onChange }: StateTriggerFormProps) {
+export function StateTriggerForm({ triggerIndex, trigger, onChange }: StateTriggerFormProps) {
+  const { formState: { errors } } = useFormContext<Automation>()
   const [hasAttributes, setHasAttributes] = useState(false)
+  const triggerErrors = errors.triggers?.[triggerIndex] as any
 
   useEffect(() => {
     let cancelled = false
@@ -188,6 +221,9 @@ export function StateTriggerForm({ trigger, onChange }: StateTriggerFormProps) {
         <FormDescription>
           Select the entity whose state changes should trigger this automation.
         </FormDescription>
+        {triggerErrors?.data?.entity_id && (
+          <FormMessage>{triggerErrors.data.entity_id.message}</FormMessage>
+        )}
       </FormItem>
 
       {/* Attribute */}
@@ -269,10 +305,14 @@ export function StateTriggerForm({ trigger, onChange }: StateTriggerFormProps) {
 
 // EventTrigger form
 interface EventTriggerFormProps {
+  triggerIndex: number
   trigger: EventTrigger
   onChange: (data: EventTrigger) => void
 }
-function EventTriggerForm({ trigger, onChange }: EventTriggerFormProps) {
+function EventTriggerForm({ triggerIndex, trigger, onChange }: EventTriggerFormProps) {
+  const { formState: { errors } } = useFormContext<Automation>()
+  const triggerErrors = errors.triggers?.[triggerIndex] as any
+  
   return (
     <FormItem>
       <FormLabel>Event Type</FormLabel>
@@ -284,6 +324,9 @@ function EventTriggerForm({ trigger, onChange }: EventTriggerFormProps) {
           onChange={(e) => onChange({ ...trigger, event_type: e.target.value })}
         />
       </FormControl>
+      {triggerErrors?.data?.event_type && (
+        <FormMessage>{triggerErrors.data.event_type.message}</FormMessage>
+      )}
     </FormItem>
   )
 }

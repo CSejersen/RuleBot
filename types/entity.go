@@ -9,6 +9,7 @@ const (
 	EntityTypeScene   EntityType = "scene"
 	EntityTypeSpeaker EntityType = "speaker"
 	EntityTypeButton  EntityType = "button"
+	EntityTypeSensor  EntityType = "sensor"
 	EntityTypeUnknown EntityType = "unknown"
 )
 

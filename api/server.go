@@ -2,10 +2,11 @@ package api
 
 import (
 	"context"
-	"go.uber.org/zap"
 	"home_automation_server/engine"
 	"home_automation_server/types"
 	"net/http"
+
+	"go.uber.org/zap"
 )
 
 type Server struct {
@@ -53,6 +54,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/devices/", s.handleDevicesSubResources)
 
 	s.mux.HandleFunc("/api/services", s.handleServices)
+	s.mux.HandleFunc("/api/services/validate-param", s.handleValidateParam)
 
 	s.mux.HandleFunc("/api/integrations/", s.handleIntegrationSubresources)
 

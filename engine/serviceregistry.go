@@ -28,7 +28,7 @@ func (r *ServiceRegistry) Register(domain, service string, spec integrations.Ser
 	r.services[key] = spec
 }
 
-func (r *ServiceRegistry) Call(ctx context.Context, domain, service string, action *automation.Action) error {
+func (r *ServiceRegistry) Call(ctx context.Context, domain, service string, action *automation.Action, emitter integrations.EventEmitter) error {
 	key := getKey(domain, service)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -36,7 +36,7 @@ func (r *ServiceRegistry) Call(ctx context.Context, domain, service string, acti
 	if !ok {
 		return errors.New(fmt.Sprintf("service %s not registered yet", key))
 	}
-	return serviceData.Handler(ctx, action)
+	return serviceData.Handler(ctx, action, emitter)
 }
 
 func getKey(domain, service string) string {

@@ -8,7 +8,7 @@ import type {
   TargetSpec,
   ServiceSpec,
   ServicesResponse,
-} from "@/types/services/services";
+} from "@/types/service/service";
 
 export async function GET(req: Request) {
   try {

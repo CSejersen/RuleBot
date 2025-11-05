@@ -10,7 +10,7 @@ import { Loader2 } from "lucide-react";
 import { ConfigSchema } from "../api/integrations/descriptors/route";
 import { IntegrationConfig } from "../api/integrations/configs/route";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { engineWSsendMessage } from "@/lib/engine-socket";
+import { sendSocketMessage } from "@/lib/engine-socket";
 
 interface AddIntegrationDialogProps {
   open: boolean;
@@ -62,7 +62,7 @@ export function AddIntegrationDialog({ open, onClose, descriptor, onCreated }: A
       const newConfig = await res.json();
       onCreated(newConfig);
       onClose();
-      engineWSsendMessage({
+      sendSocketMessage({
         type: "load_integration",
         data: { integration_name: descriptor.name },
       });

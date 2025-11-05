@@ -8,4 +8,5 @@ export const ENTITY_ICON_MAP: Record<string, string> = {
   light: "💡",
   grouped_light: "💡💡",
   scene: "🎬",
+  button: "🔘",
 }

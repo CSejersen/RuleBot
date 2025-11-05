@@ -30,3 +30,37 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(map[string]any{"services": resp})
 }
+
+type ValidateParamRequest struct {
+	Service   string `json:"service"`
+	ParamName string `json:"param_name"`
+	Value     any    `json:"value"`
+}
+
+type ValidateParamResponse struct {
+	ResolvedValue any `json:"resolved_value"`
+}
+
+func (s *Server) handleValidateParam(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ValidateParamRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	resolved, err := s.Engine.ResolveActionParam(req.Value)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ValidateParamResponse{ResolvedValue: resolved})
+}

@@ -7,16 +7,18 @@ import (
 type EventType string
 
 const (
-	EventTypeStateChanged EventType = "state_changed"
-	EventTypeCallService  EventType = "call_service"
-	EventTimeChanged      EventType = "time_changed"
+	EventTypeStateChanged   EventType = "state_changed"
+	EventTypeCallService    EventType = "call_service"
+	EventTimeChanged        EventType = "time_changed"
+	EventTypeDomainSpecific EventType = "domain_specific"
 )
 
 // Event is the base event
 type Event struct {
-	Type      EventType `json:"type"`    // e.g. "state_changed"
-	Data      any       `json:"data"`    // event payload, decoded by Type
-	Context   *Context  `json:"context"` // metadata about event origin
+	ID        string    `json:"id,omitempty"` // UUID from Context.ID
+	Type      EventType `json:"type"`         // e.g. "state_changed"
+	Data      any       `json:"data"`         // event payload, decoded by Type
+	Context   *Context  `json:"context"`      // metadata about event origin
 	TimeFired time.Time `json:"time_fired"`
 }
 
@@ -24,6 +26,7 @@ type Event struct {
 type Context struct {
 	ID       string `json:"id"`
 	ParentID string `json:"parent_id,omitempty"`
+	Origin   string `json:"origin,omitempty"` // "service", "external", "automation" ...
 }
 
 // StateChangedData is the data for a state_changed event
@@ -54,4 +57,10 @@ type CallServiceData struct {
 // TimeChangedData is the data for a time_changed event
 type TimeChangedData struct {
 	Now time.Time `json:"now"`
+}
+
+type DomainSpecificEventData struct {
+	Type     string         `json:"type"`
+	EntityID string         `json:"entity_id,omitempty"`
+	Data     map[string]any `json:"data"`
 }

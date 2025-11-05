@@ -175,6 +175,7 @@ func EventToStorage(e types.Event) (models.Event, error) {
 		ctxModel = &models.Context{
 			ID:       e.Context.ID,
 			ParentID: e.Context.ParentID,
+			Origin:   e.Context.Origin,
 			// CreatedAt is autofilled by GORM on save
 		}
 	}
@@ -189,6 +190,7 @@ func EventToStorage(e types.Event) (models.Event, error) {
 
 	if ctxModel != nil {
 		eventModel.ContextID = ctxModel.ID
+		eventModel.ID = ctxModel.ID // Use Context.ID as primary key
 	}
 
 	return eventModel, nil

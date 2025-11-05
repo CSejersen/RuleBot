@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 	"home_automation_server/engine/integration"
 	"home_automation_server/storage"
 	"home_automation_server/storage/models"
 	"home_automation_server/types"
 	"time"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // AddIntegration enables an integration with the supplied userConfig. The integration is not loaded into the engine, for that call LoadIntegration.
@@ -53,7 +54,8 @@ func (e *Engine) LoadIntegration(ctx context.Context, integrationName string) er
 		return fmt.Errorf("integration %s not available", integrationName)
 	}
 
-	integrationInstance, err := desc.CreateFunc(ctx, cfg.UserConfig, e.StateCache, e.EntityRegistry, e.Logger.Named(integrationName))
+	// Pass base logger - IntegrationLogger will handle naming
+	integrationInstance, err := desc.CreateFunc(ctx, cfg.UserConfig, e.StateCache, e.EntityRegistry, e.Logger)
 	if err != nil {
 		return fmt.Errorf("failed to create integration instance: %w", err)
 	}

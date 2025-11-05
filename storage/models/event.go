@@ -18,7 +18,7 @@ const (
 
 // Event represents a persisted event in the database
 type Event struct {
-	ID        uint `gorm:"primaryKey;autoIncrement"`
+	ID        string `gorm:"primaryKey;type:char(36)"` // UUID from Context.ID
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
@@ -30,9 +30,10 @@ type Event struct {
 	Context   *Context       `gorm:"foreignKey:ContextID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
 }
 
-// Context stores metadata about the event’s origin
+// Context stores metadata about the event's origin
 type Context struct {
 	ID        string `gorm:"primaryKey;type:char(36)"` // UUID
 	ParentID  string `gorm:"type:char(36);index"`
+	Origin    string `gorm:"type:varchar(64)"` // e.g., "service", "external", "automation", "hue", "halo"
 	CreatedAt time.Time
 }

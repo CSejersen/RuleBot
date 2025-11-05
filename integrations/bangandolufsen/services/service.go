@@ -3,11 +3,12 @@ package services
 import (
 	"context"
 	"errors"
-	"go.uber.org/zap"
 	"home_automation_server/automation"
 	"home_automation_server/integrations"
 	"home_automation_server/integrations/bangandolufsen/client"
 	"home_automation_server/types"
+
+	"go.uber.org/zap"
 )
 
 type Service struct {
@@ -46,7 +47,7 @@ func (s *Service) ExportServices() map[string]integrations.ServiceSpec {
 	}
 }
 
-func (s *Service) SetPlaybackSource(ctx context.Context, action *automation.Action) error {
+func (s *Service) SetPlaybackSource(ctx context.Context, action *automation.Action, emitter integrations.EventEmitter) error {
 	source, err := action.StringParam("source")
 	if err != nil {
 		s.Logger.Error("Error getting 'source' param", zap.Error(err))
@@ -71,7 +72,7 @@ func (s *Service) SetPlaybackSource(ctx context.Context, action *automation.Acti
 	return nil
 }
 
-func (s *Service) ExpandExperience(ctx context.Context, action *automation.Action) error {
+func (s *Service) ExpandExperience(ctx context.Context, action *automation.Action, emitter integrations.EventEmitter) error {
 	expandTo, err := action.StringParam("to")
 	if err != nil {
 		s.Logger.Error("Error getting 'to' param", zap.Error(err))

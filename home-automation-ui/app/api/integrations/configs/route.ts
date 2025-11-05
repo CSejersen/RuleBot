@@ -4,6 +4,7 @@ import pool from "@/lib/db";
 import { IntegrationConfig } from "@/types/integration/integration-config";
 import { validateRequest } from "@/lib/validate";
 import { IntegrationConfigSchema } from "@/types/integration/integration-config-schema";
+import { parseJsonOrFallback } from "@/lib/utils";
 
 export async function GET() {
   try {
@@ -24,7 +25,7 @@ export async function GET() {
       id: row.id,
       integration_name: row.integration_name,
       display_name: row.display_name,
-      user_config: typeof row.user_config === "string" ? JSON.parse(row.user_config) : row.user_config,
+      user_config: parseJsonOrFallback(row.user_config),
       enabled: !!row.enabled,
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -78,10 +79,7 @@ export async function POST(req: Request) {
       id: row.id,
       integration_name: row.integration_name,
       display_name: row.display_name,
-      user_config:
-        typeof row.user_config === "string"
-          ? JSON.parse(row.user_config)
-          : row.user_config,
+      user_config: parseJsonOrFallback(row.user_config),
       enabled: !!row.enabled,
       created_at: row.created_at,
       updated_at: row.updated_at,

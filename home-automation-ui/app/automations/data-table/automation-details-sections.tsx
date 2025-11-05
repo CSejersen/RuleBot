@@ -85,11 +85,9 @@ export function ActionDetails({ actions }: { actions: Action[] }) {
                 {action.targets?.length > 0 && (
                   <div>
                     <span className="font-medium">Targets:</span>
-                    <ul className="list-disc list-inside ml-2">
-                      {action.targets.map((target, tIndex) => (
-                        <li key={tIndex}>{target.entity_id}</li>
-                      ))}
-                    </ul>
+                    <pre className="bg-muted p-2 rounded-md overflow-auto text-sm">
+                      {JSON.stringify(action.targets, null, 2)}
+                    </pre>
                   </div>
                 )}
                 {action.params && (

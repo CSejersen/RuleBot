@@ -1,9 +1,10 @@
 package engine
 
 import (
-	"go.uber.org/zap"
 	"home_automation_server/types"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 type EventBus struct {
@@ -12,9 +13,10 @@ type EventBus struct {
 	Logger      *zap.Logger
 }
 
-func NewEventBus() *EventBus {
+func NewEventBus(logger *zap.Logger) *EventBus {
 	return &EventBus{
 		subscribers: make(map[chan types.Event]struct{}),
+		Logger:      logger,
 	}
 }
 

@@ -47,5 +47,17 @@ func (d *DiscoveryClient) Discover(ctx context.Context) ([]types.Device, []types
 			entities = append(entities, entity)
 		}
 	}
+
+	systemEntity := types.Entity{
+		ExternalID: haloID,
+		DeviceID:   haloID,
+		EntityID:   fmt.Sprintf("%s.halo_system_state", types.EntityTypeSensor),
+		Type:       types.EntityTypeSensor,
+		Name:       "Halo System State",
+		Enabled:    true,
+		Available:  true,
+	}
+
+	entities = append(entities, systemEntity)
 	return devices, entities, nil
 }

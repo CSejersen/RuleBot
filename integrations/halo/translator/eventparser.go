@@ -33,12 +33,12 @@ func (p *EventParser) ParseEvent(b []byte) (types.ExternalEvent, error) {
 		return nil, err
 	}
 
-	eventData, ok := p.EventRegistry[base.Type]
+	eventDescriptor, ok := p.EventRegistry[base.Type]
 	if !ok {
 		return nil, fmt.Errorf("unsupported event type: %s", base.Type)
 	}
 
-	event := eventData.Constructor()
+	event := eventDescriptor.Constructor()
 	if err := json.Unmarshal(raw.Event, event); err != nil {
 		return nil, err
 	}

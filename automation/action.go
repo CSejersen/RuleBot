@@ -13,7 +13,8 @@ type Action struct {
 
 // Target is the target for a service call. Currently, we only support entityIDs.
 type Target struct {
-	EntityID string `json:"entity_id,omitempty"`
+	EntityID   string `json:"entity_id,omitempty"`
+	ExternalID string `json:"external_id,omitempty"`
 }
 
 func (a *Action) FloatParam(key string) (float64, error) {
@@ -30,6 +31,13 @@ func (a *Action) FloatParam(key string) (float64, error) {
 			return 0, fmt.Errorf("param %s is nil pointer", key)
 		}
 		return *v, nil
+	case int:
+		return float64(v), nil
+	case *int:
+		if v == nil {
+			return 0, fmt.Errorf("param %s is nil pointer", key)
+		}
+		return float64(*v), nil
 	default:
 		return 0, fmt.Errorf("param %s must be float, got %T", key, raw)
 	}
@@ -40,11 +48,25 @@ func (a *Action) IntParam(key string) (int, error) {
 	if !ok {
 		return 0, fmt.Errorf("missing param: %s", key)
 	}
-	val, ok := raw.(int)
-	if !ok {
-		return 0, fmt.Errorf("param %s must be int, got %T", key, raw)
+
+	switch v := raw.(type) {
+	case int:
+		return v, nil
+	case *int:
+		if v == nil {
+			return 0, fmt.Errorf("param %s is nil pointer", key)
+		}
+		return *v, nil
+	case float64:
+		return int(v), nil
+	case *float64:
+		if v == nil {
+			return 0, fmt.Errorf("param %s is nil pointer", key)
+		}
+		return int(*v), nil
+	default:
+		return 0, fmt.Errorf("param %s must be int or float, got %T", key, raw)
 	}
-	return val, nil
 }
 
 func (a *Action) StringParam(key string) (string, error) {
@@ -74,6 +96,6 @@ func (a *Action) BooleanParam(key string) (bool, error) {
 		}
 		return *v, nil
 	default:
-		return false, fmt.Errorf("param %s must be float, got %T", key, raw)
+		return false, fmt.Errorf("param %s must be bool, got %T", key, raw)
 	}
 }

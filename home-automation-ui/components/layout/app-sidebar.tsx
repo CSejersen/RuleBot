@@ -34,17 +34,17 @@ const data = {
           title: "Automations",
           url: "/automations",
         },
+        {
+          title: "Event Timeline",
+          url: "/events",
+          isActive: true,
+        },
       ],
     },
     {
       title: "Debugging",
       url: "/debugging",
       items: [
-        {
-          title: "Event Timeline",
-          url: "/events",
-          isActive: true,
-        },
         {
           title: "logs",
           url: "/logs",

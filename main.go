@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/joho/godotenv"
-	"go.uber.org/zap"
 	"home_automation_server/api"
 	"log"
 	"os"
 	"time"
+
+	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -37,7 +38,7 @@ func main() {
 	}
 
 	// Setup API + WS Server
-	eventCh := e.ProcessedEventBus.Subscribe()
+	eventCh := e.EventBus.Subscribe()
 	apiServer := api.NewServer(ctx, e, logger, eventCh)
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
